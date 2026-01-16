@@ -1,9 +1,11 @@
 # Rust build artifacts
-/target/
-**/target/
+/target/*
+**/target/*
 Cargo.lock
 
 # EXCEPTION: Keep release binary for distribution
+!/target/release/
+/target/release/*
 !/target/release/can-log-cli.exe
 !/target/release/*.dll
 
