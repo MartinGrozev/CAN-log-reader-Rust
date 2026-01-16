@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo doc:*)",
+      "Bash(timeout /t 3)",
+      "Bash(cargo clean:*)",
+      "Bash(rustc:*)",
+      "Bash(.test_arxml.exe)",
+      "Bash(test_arxml.exe:*)",
+      "Bash(./test_arxml.exe:*)",
+      "Bash(cargo search:*)",
+      "Bash(cargo check:*)",
+      "Bash(where:*)",
+      "Bash(dir \"C:\\Program Files\\Microsoft Visual Studio\")",
+      "Bash(dir \"C:\\Program Files\\Microsoft Visual Studio\\2022\")",
+      "Bash(dir \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\")",
+      "Bash(dir \"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe\")",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat\" x64)",
+      "Bash(cl.exe)",
+      "Bash(mkdir:*)",
+      "Bash(xcopy:*)",
+      "Bash(robocopy:*)",
+      "Bash(exit 0)",
+      "Bash(powershell:*)",
+      "Bash(dir:*)",
+      "Bash(timeout /t 30)",
+      "Bash(git clone:*)",
+      "Bash(./bootstrap-vcpkg.bat)",
+      "Bash(./vcpkg install:*)",
+      "Bash(./test_arxml_public_api.exe:*)",
+      "Bash(./test_message_decoder.exe:*)",
+      "Bash(./target/release/can-log-cli.exe:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

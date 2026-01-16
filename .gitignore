@@ -1,0 +1,72 @@
+# Rust build artifacts
+/target/
+**/target/
+Cargo.lock
+
+# EXCEPTION: Keep release binary for distribution
+!/target/release/can-log-cli.exe
+!/target/release/*.dll
+
+# Rust debug builds
+/debug/
+**/debug/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# vcpkg
+/vcpkg/
+/vcpkg_installed/
+
+# Test files (keep structure, not actual data)
+*.blf
+*.mf4
+*.dbc
+*.arxml
+/test_data/
+
+# EXCEPTION: Keep example test files in specific folder
+!/examples/*.dbc
+!/examples/*.arxml
+
+# Build outputs
+*.exe
+*.pdb
+*.dll
+*.so
+*.dylib
+
+# EXCEPTION: Keep the release CLI binary
+!/target/release/can-log-cli.exe
+
+# Logs
+*.log
+
+# OS generated
+Thumbs.db
+.DS_Store
+
+# Compiled C++ (from mdflib)
+*.o
+*.obj
+*.lib
+*.a
+
+# CMake
+/build/
+/out/
+CMakeCache.txt
+CMakeFiles/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Documentation build
+/book/

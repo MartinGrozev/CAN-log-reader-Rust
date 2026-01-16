@@ -1,0 +1,13 @@
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
+-- Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR) 
+-- ZLIB Found (Try 1): FALSE
+CMake Error at C:/Program Files/CMake/share/cmake-4.0/Modules/FindPackageHandleStandardArgs.cmake:227 (message):
+  Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)
+Call Stack (most recent call first):
+  C:/Program Files/CMake/share/cmake-4.0/Modules/FindPackageHandleStandardArgs.cmake:591 (_FPHSA_FAILURE_MESSAGE)
+  C:/Program Files/CMake/share/cmake-4.0/Modules/FindZLIB.cmake:202 (find_package_handle_standard_args)
+  script/zlib.cmake:14 (find_package)
+  mdflib/CMakeLists.txt:174 (include)
+
+
+-- Configuring incomplete, errors occurred!

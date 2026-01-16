@@ -1,0 +1,27 @@
+[package]
+name = "can-log-decoder"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace dependencies
+thiserror.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+chrono.workspace = true
+log.workspace = true
+
+# Additional dependencies for decoder
+byteorder = "1.5"
+can-dbc = "5.0"  # DBC file parser
+autosar-data = "0.21"  # AUTOSAR ARXML parser
+ablf = "0.2"  # BLF file parser
+
+[build-dependencies]
+cmake = "0.1"  # For building mdflib C++ library
+cc = "1.0"  # For building C++ wrapper code
+
+[dev-dependencies]
+tempfile = "3.8"  # For testing

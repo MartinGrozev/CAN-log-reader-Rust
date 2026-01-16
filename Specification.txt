@@ -1,0 +1,1059 @@
+================================================================================
+CAN LOG READER/PARSER - DETAILED SPECIFICATION
+================================================================================
+Last Updated: 2026-01-10
+
+1) OVERVIEW
+================================================================================
+CAN log reader/parser that reads/parses offline prerecorded blf/mf4 files,
+decodes the messages and their signals, and outputs a report in .txt or HTML format.
+
+Core Features:
+- Signal value change tracking and reporting
+- Configurable event tracing with parent-child relationships
+- User callbacks (C/Rust) for custom logic
+- CAN-TP message reconstruction
+- Multi-file parallel processing with aggregate statistics
+- Basic info: detecting which messages are on which CAN channel
+- Log filtering by message or CAN channel (output formats: blf/mf4/asc)
+
+
+2) GENERAL REQUIREMENTS
+================================================================================
+2.1) Implementation: Rust, compiled as CLI tool for Windows 10/11
+2.2) Use existing crates where possible
+2.3) Configuration via config.toml file (passed as CLI parameter)
+2.4) Target platform: Windows 10/11
+
+
+3) FUNCTIONAL REQUIREMENTS
+================================================================================
+
+3.1) INPUTS
+-----------
+3.1.1) Path to folder or specific file(s) to decode
+3.1.2) Path to DBC and/or AUTOSAR 4 ARXML files for decoding (can be multiple)
+
+3.2) FILE PROCESSING
+--------------------
+3.2.1) Support single file or multiple files (relative/absolute paths in config.toml)
+3.2.2) Support processing all blf/mf4 files in folder and subfolders (data mining)
+3.2.3) Multiple files are processed in parallel threads (independent processing)
+3.2.4) Files are completely independent - no event correlation across files
+3.2.5) Each file gets its own detailed report
+3.2.6) When multiple files are processed, generate aggregate summary report:
+       - Placed in parent directory if all files in same folder
+       - Placed in folder of log[0] if files are in different locations
+       - Contains per-file event outcomes and aggregate statistics
+       - Shows which files have errors/incomplete events
+       - Provides success rates and failure patterns across all files
+
+3.3) SIGNAL TRACKING AND BINDING
+---------------------------------
+3.3.1) Signal Binding Strategy - "First-Message-ID Wins":
+       - When a signal name appears in multiple messages (different CAN IDs or DBCs),
+         the tool binds to the FIRST message containing that signal that appears
+         chronologically in the trace
+       - Once bound, only value changes from that specific message ID are tracked
+       - Same signal in other messages is ignored for tracking purposes
+       - Binding is deterministic: same trace always produces same bindings
+       - Rationale: Handles duplicate signals across DBCs/channels without config
+
+3.3.2) Signal Binding Examples:
+       Example 1: Signal in multiple DBCs
+       - EngineSpeed defined in powertrain.dbc (CAN ID 0x123, channel 0)
+       - EngineSpeed defined in diagnostics.dbc (CAN ID 0x456, channel 1)
+       - If 0x123 appears first in trace → bind to 0x123, ignore 0x456
+       - If 0x456 appears first in trace → bind to 0x456, ignore 0x123
+
+       Example 2: Signal only in one message
+       - VehicleSpeed only in message 0x200
+       - Binds to 0x200 when first seen, straightforward case
+
+3.3.3) Configuration:
+       - Signals configured explicitly by name in config.toml, or use 'all'
+       - No domain/priority configuration needed (automatic binding)
+       - Simple list: track = ["EngineSpeed", "VehicleSpeed"] or track = "all"
+
+3.3.4) Signal Binding Report Section:
+       - Report includes "SIGNAL BINDINGS" info section showing:
+         * Which message ID each signal bound to
+         * Message name, CAN channel, DBC source file
+         * Allows user to verify binding decisions
+       - Signals configured but not found in trace: marked "Not found"
+
+3.3.5) Signal Change Detection:
+       - Detect ALL value changes for bound signals (independent of events)
+       - All signal changes appear in RAW section regardless of event status
+       - Each signal change includes:
+         * Index number
+         * Absolute timestamp
+         * Delta from log start
+         * Delta from previous signal change of interest
+         * Old value → New value
+
+3.3.6) Implementation Note (Application Layer):
+       - Core decoder emits ALL decoded signals from ALL messages
+       - Application layer (CLI tool) performs binding and filtering
+       - First occurrence of signal name creates binding entry
+       - Subsequent messages checked against binding before tracking
+
+3.4) AUTOSAR CONTAINER PDU AND MULTIPLEXED SIGNAL SUPPORT
+----------------------------------------------------------
+3.4.1) Container PDU Support - ALL AUTOSAR container types:
+       A) Static Container PDU:
+          - Fixed layout, always contains same PDUs at same positions
+          - Layout defined in ARXML
+
+       B) Dynamic Container PDU:
+          - Variable layout with header bytes indicating which PDUs are present
+          - Header format defined in ARXML
+
+       C) Queued Container PDU:
+          - Multiple instances of same PDU type queued together
+          - Queue management defined in ARXML
+
+3.4.2) Container PDU Decoding Depth:
+       - Decoder FULLY decodes contained PDUs to signals (not just raw bytes)
+       - Each contained PDU is decoded as if it were a standalone message
+       - Signals from contained PDUs are available for tracking/events
+       - Consistent with decoder philosophy: always output decoded signals
+
+3.4.3) Multiplexed Signal Support:
+       - MANDATORY: Automatic decoding of multiplexed signals
+       - Multiplexer signal value determines which signals to decode
+       - Works in both regular CAN messages AND contained PDUs
+       - DBC and ARXML define multiplexer relationships
+
+       Example:
+       - Message 0x200 has "Mode" signal (multiplexer)
+       - If Mode == 0: decode signals A, B, C
+       - If Mode == 1: decode signals D, E, F
+       - Decoder automatically selects correct signal set based on Mode value
+
+3.4.4) ARXML Parsing Requirements:
+       - Parse container PDU definitions (type, layout, headers)
+       - Parse contained PDU mappings and positions
+       - Parse multiplexed signal definitions (multiplexer, switch values)
+       - Handle nested structures (container with multiplexed PDUs inside)
+
+3.4.5) Signal Binding with Containers and Multiplexing:
+       - Signals from contained PDUs follow same "first-message-ID wins" strategy
+       - Container ID is used as message ID for binding purposes
+       - Multiplexed signals: binding based on first occurrence regardless of mux value
+       - Signal tracking continues even if multiplexer changes (same signal, different context)
+
+3.5) CALLBACK SYSTEM
+--------------------
+3.5.1) Two-tier callback architecture:
+       A) Simple declarative callbacks in config.toml (no compilation needed)
+       B) Advanced callbacks in C (compiled to .dll/.so)
+
+3.5.2) Simple Declarative Callbacks (config.toml):
+       - Expression-based conditions (e.g., "value > 6000")
+       - Predefined actions: append_message, stop_event, start_event
+       - Example:
+         signal = "EngineSpeed"
+         condition = "value > 6000"
+         action = "append_message"
+         message = "WARNING: Overspeed!"
+
+3.5.3) Advanced C Callbacks:
+       - User writes C code using provided header (can_log_reader_api.h)
+       - Compiles to shared library (.dll on Windows)
+       - Configured in config.toml with library path and function names
+       - Build script template provided for users
+
+3.5.4) Callback Types:
+       - Signal callbacks: triggered on signal value change
+       - CAN-TP callbacks: triggered when CAN-TP message reconstructed
+
+3.5.5) Multiple callbacks on same message:
+       - All callbacks are called after entire message is decoded
+       - Order of execution: per-signal callbacks, then message-level callbacks
+
+3.5.6) Information available to signal callbacks:
+       - CAN channel
+       - CAN message ID
+       - Sender (ECU name)
+       - Current value
+       - Previous value (via prev(signal_name) in expressions or API call)
+       - Absolute timestamp
+       - Delta timestamp from log start
+       - Delta timestamp from previous signal change
+
+3.5.7) Callback API functions (callable from C callbacks):
+       - append_to_raw(const char* message) - Add text to RAW section
+       - start_event(const char* event_name) - Programmatically start event
+       - stop_event(const char* event_name) - Programmatically stop event
+       - trigger_event_error(const char* event_name, const char* reason)
+       - get_prev_value(const char* signal_name) - Get previous signal value
+
+3.6) EVENT TRACING SYSTEM
+--------------------------
+3.6.1) Events defined in config.toml with:
+       - Start condition (expression)
+       - End condition (expression)
+       - Error condition (expression)
+       - Optional: parent event relationship
+       - Optional: signals to capture at event completion
+       - Optional: allow_multiple_instances flag
+
+3.6.2) Expression Language:
+       Operators:
+       - Comparison: ==, !=, >, <, >=, <=
+       - Logical: &&, ||, ! (with parentheses for grouping)
+       - Arithmetic: +, -, *, /
+
+       Signal Access:
+       - Direct by name: EngineSpeed, GearPosition
+       - Multi-signal expressions: "X == 5 || Y == 3" (signals from different messages)
+       - Expression evaluates using current values of all referenced signals
+       - Signals retain last-seen value until updated
+
+       Built-in Functions:
+       - time_since_start() - seconds since log decoding started
+       - time_since_event_start() - seconds since current event started
+       - prev(signal_name) - previous value of signal
+       - changed(signal_name) - true if signal changed in current message
+       - delta(signal_name) - difference from previous value
+       - abs(x), min(a,b), max(a,b) - math functions
+
+       Event State Queries:
+       - event_active("EventName") - true if event currently running
+       - event_completed("EventName") - true if event finished successfully
+       - event_failed("EventName") - true if event finished with error
+       - event_incomplete("EventName") - true if event started but never finished
+       - event_last_state("EventName") - returns "ok"|"error"|"incomplete"|"not_started"
+       - event_instance_count("EventName") - number of times event started
+
+       Complex Expression Examples:
+       - "(X == 5 && Y < 10) || Z == 3" - Multi-signal with nested logic
+       - "BatteryTemp > 45.0 || InletTemp > 50.0" - Multiple temperature checks
+       - "V2G_Error != 0 || time_since_event_start() > 300.0" - Error or timeout
+
+3.6.3) Parent-Child Event Relationships:
+       - Child events can reference parent event (optional, max 1 parent)
+       - Child events can start BEFORE parent event starts
+       - Parent event checks child states when parent ends
+       - Parent outcome can depend on child outcomes via error_condition
+       - Example error_condition: event_failed("SLAC") || V2G_Session_Error != 0
+       - No overlapping parents: each event has 0 or 1 parent
+
+3.6.4) Multiple Event Instances:
+       - Events can have allow_multiple_instances = true
+       - Each instance tracked separately (start, end, outcome, duration)
+       - Useful for retryable operations (e.g., SLAC connection attempts)
+       - event_last_state() returns state of most recent instance
+       - All instances appear in report with separate entries
+
+3.6.5) Event States:
+       - NOT_STARTED: Condition never met
+       - ACTIVE: Started, not yet ended
+       - COMPLETED: Ended successfully (no error condition)
+       - ERROR: Error condition triggered
+       - INCOMPLETE: Started but trace ended before end condition
+       - PARTIAL_START: Start condition seen but log ended before completion
+       - PARTIAL_END: End condition seen but no start (log started mid-event)
+
+3.6.6) Partial Event Handling:
+       - PARTIAL_START: Event started but log ended before end/error condition
+         * Start time recorded, end time = None
+         * Duration = time from start to log end
+         * Marked with warning flag in report
+
+       - PARTIAL_END: End condition seen without corresponding start
+         * Happens when log starts mid-event (event already active)
+         * Start time = None, end time recorded
+         * Duration = Unknown
+         * Marked with warning flag in report: "⚠ PARTIAL_END - log started mid-event"
+
+       - Both partial states included in normal events section (not separate)
+       - Statistics track partial events separately for data quality awareness
+
+3.6.7) Signal Snapshots at Event Completion:
+       - Configure signals to capture when event ends successfully
+       - Values included in event summary section
+       - Useful for debugging and correlation
+       - Example config:
+         capture_signals_on_end = ["BatterySOC", "TotalEnergyDelivered"]
+
+3.6.8) Signal Snapshots on Error (NEW):
+       - Configure signals to capture when error condition triggers
+       - Provides diagnostic context for failures
+       - Captures values at moment of error detection
+       - Values included in error event summary with "📸 Signal Snapshot at Error"
+       - Example config:
+         capture_signals_on_error = [
+             "BatterySOC",
+             "ChargingCurrent",
+             "ChargingVoltage",
+             "ConnectionState",
+             "Temperature"
+         ]
+       - Report format:
+         EVENT: ChargingSession #3
+           Status: ERROR
+           Error Time: 14:28:50.456
+           Error Reason: V2G_Session_Error = 12 (timeout)
+
+           📸 Signal Snapshot at Error:
+             BatterySOC: 45.2%
+             ChargingCurrent: 125.3 A
+             ChargingVoltage: 392.1 V
+             ConnectionState: 3 (Connected)
+             Temperature: 42.5 °C
+
+3.6.9) Escape Hatch - C Callbacks for Complex Conditions:
+       - For very complex logic, conditions can reference C callback functions
+       - Example: start_condition_callback = "my_custom_check"
+       - Callback returns true/false for condition evaluation
+
+3.7) CAN-TP RECONSTRUCTION
+--------------------------
+3.7.1) Support CAN-FD CAN-TP multi-frame message reconstruction
+3.7.2) Hybrid Configuration Approach:
+       A) EXPLICIT PAIRS (Recommended for production):
+          - User specifies source/target address pairs in config.toml
+          - Fast, deterministic, no false positives
+          - Optional name field for documentation
+          Example:
+          [[cantp.pairs]]
+          source = 0x7E0
+          target = 0x7E8
+          name = "ECU_Diagnostics"  # optional
+
+       B) AUTO-DETECTION MODE (For exploration):
+          - Set auto_detect = true in config.toml
+          - Tool scans trace for CAN-TP frame patterns
+          - Automatically identifies source/target pairs
+          - Detected pairs shown in report info section
+          - Slower (requires initial scan pass)
+          - Useful for unknown traces or discovery
+
+       C) HYBRID:
+          - Can combine both: explicit pairs + auto_detect
+          - Explicit pairs always processed
+          - Auto-detect finds additional pairs not in config
+
+3.7.3) Flow Control Handling:
+       - Support standard ISO-TP flow control frames
+       - Handle Continue To Send (CTS), Wait (WT), and Overflow (OVFLW)
+       - Configurable timeouts for incomplete sequences
+       - Invalid/incomplete sequences logged but don't halt processing
+
+3.7.4) Reconstructed Message Output:
+       - Emitted as DecodedEvent::CanTpMessage
+       - Timestamp: timestamp of FIRST frame in sequence
+       - Total payload length included
+       - Complete reassembled payload bytes
+       - Available to callbacks for parsing (e.g., UDS)
+
+3.7.5) CAN-TP Callbacks:
+       - Callbacks can be registered for CAN-TP messages
+       - Receive complete payload after reconstruction
+       - Common use: parse UDS diagnostic messages
+       - Can append decoded UDS info to RAW section
+       - Can trigger events based on UDS content
+
+3.8) OUTPUT REPORTS
+-------------------
+3.8.1) Two output formats: TXT and HTML
+
+       TXT Format:
+       - Plain text, monospace-friendly
+       - Tables formatted with ASCII characters
+       - Suitable for terminal viewing and simple text editors
+
+       HTML Format (Basic):
+       - Same structure as TXT (Signal Bindings, RAW, Summary)
+       - Clean CSS styling for readability
+       - Tables with proper HTML table elements
+       - Monospace font for RAW section
+       - Responsive layout for different screen sizes
+       - No JavaScript required (static HTML)
+
+3.8.2) Report Structure (up to Four Sections):
+
+       A) CAN CHANNEL MAPPING (Optional - if include_basic_info = true):
+          - First section when enabled
+          - Shows all detected CAN messages and their channels
+          - Frame count for each message
+          - See section 3.10 for details
+
+       B) SIGNAL BINDINGS SECTION (Info):
+          - Shows which message each tracked signal bound to
+          - Helps user understand binding decisions
+          - Format:
+            ┌─────────────────────────────────────────────────────────────────┐
+            │ SIGNAL BINDINGS                                                 │
+            ├──────────────────┬──────────┬───────────────────┬─────┬────────┤
+            │ Signal Name      │ CAN ID   │ Message Name      │ Ch  │ Source │
+            ├──────────────────┼──────────┼───────────────────┼─────┼────────┤
+            │ EngineSpeed      │ 0x123    │ Engine_Data       │ 0   │ pwr.dbc│
+            │ VehicleSpeed     │ 0x123    │ Engine_Data       │ 0   │ pwr.dbc│
+            │ BatteryVoltage   │ 0x456    │ Battery_Status    │ 1   │ diag.db│
+            │ GearPosition     │ [Not found in trace]                        │
+            └──────────────────┴──────────┴───────────────────┴─────┴────────┘
+
+       C) RAW INFO SECTION:
+          - All signal value changes in chronological order
+          - Each line has index number [1], [2], [3]...
+          - Format: [index] timestamp (Δfrom_prev): SignalName = old_val → new_val
+          - Event state changes annotated inline (→ Event 'Name' STARTED/COMPLETED/ERROR)
+          - User callback messages appended to relevant lines
+          - CAN-TP reconstructed messages included
+
+       D) SUMMARY SECTION:
+          - Per-event summaries with:
+            * Event name and outcome (OK / ERROR / INCOMPLETE)
+            * Start and end index references [from RAW section]
+            * Start and end timestamps
+            * Duration
+            * For multiple instances: all instances listed separately
+            * Captured signal values at event completion
+            * For parent events: child event states
+            * Error reason if applicable
+
+3.8.3) Multi-File Summary Report (when multiple files processed):
+       - Aggregate statistics across all files
+       - Per-file status (parsed successfully, errors, event outcomes)
+       - Event success rates across all files
+       - List of files with errors/incomplete events
+       - Aggregated event instance counts and success rates
+       - Quick navigation: links to individual detailed reports
+
+3.9) FILTERING FEATURE
+----------------------
+3.9.1) Report-Level Filtering:
+       - Filter which messages/channels appear in the generated report
+       - Does NOT create new log files (simpler implementation)
+       - Decoder still processes entire log file
+       - Application layer filters output during report generation
+
+3.9.2) Filter Types:
+       A) Channel Filter:
+          - Only include messages from specified CAN channels
+          - Example: channels = [0, 1] → only show CAN0 and CAN1
+
+       B) Message ID Filter:
+          - Only include specific CAN message IDs
+          - Example: message_ids = [0x123, 0x456, 0x789]
+          - Useful for focusing on specific subsystems
+
+       C) Combined Filters:
+          - Can combine channel AND message filters
+          - Logic: Include if (channel matches) AND (message_id matches)
+
+3.9.3) Filter Application:
+       - Filters apply to RAW section (which signals appear)
+       - Signal Bindings section shows all configured signals (with "Not in filtered view" note)
+       - Events still evaluated on full data, but only filtered signals shown in RAW
+       - Summary section shows all events (filtering doesn't affect event detection)
+
+3.9.4) Configuration in config.toml:
+       [filtering]
+       channels = [0, 1]  # Only these channels in report
+       message_ids = [0x123, 0x456]  # Only these CAN IDs in report
+       # If both specified: message must match both conditions
+
+3.10) BASIC INFO FEATURE
+------------------------
+3.10.1) CAN Channel Mapping - Optional Report Section:
+        - Detects which CAN messages appear on which CAN channels
+        - Opt-in via config.toml: include_basic_info = true
+        - When enabled, appears as first section in report (before Signal Bindings)
+        - Disabled by default to keep production reports focused
+
+3.10.2) Basic Info Section Format:
+        ┌─────────────────────────────────────────────────────────────┐
+        │ CAN CHANNEL MAPPING                                         │
+        ├──────────┬───────────────────────┬─────┬──────────────────┤
+        │ CAN ID   │ Message Name          │ Ch  │ Frame Count      │
+        ├──────────┼───────────────────────┼─────┼──────────────────┤
+        │ 0x123    │ Engine_Data           │ 0   │ 1,234            │
+        │ 0x456    │ Battery_Status        │ 1   │ 567              │
+        │ 0x789    │ (Unknown)             │ 0   │ 89               │
+        └──────────┴───────────────────────┴─────┴──────────────────┘
+
+        - Shows all detected CAN IDs with their channels
+        - Frame count indicates activity level
+        - "Unknown" for messages not in DBC/ARXML
+        - Sorted by channel, then by CAN ID
+
+3.10.3) Use Cases:
+        - Exploratory analysis: understand trace contents
+        - Verification: confirm expected messages present
+        - Debugging: identify unexpected messages or channels
+        - Documentation: quick reference for trace structure
+
+3.10.4) Configuration:
+        [output]
+        format = "txt"  # or "html"
+        output_dir = "./reports"
+        include_basic_info = true  # Optional, default = false
+
+
+4) ARCHITECTURE
+================================================================================
+
+4.1) LIBRARY vs APPLICATION SEPARATION
+---------------------------------------
+
+The system is split into two distinct parts:
+
+A) CORE DECODER LIBRARY (Reusable Rust Crate)
+   - Minimal, focused responsibility: decode log files
+   - No knowledge of events, callbacks, reports, or business logic
+   - Input: Log file + DBC/ARXML files + minimal decode config
+   - Output: Stream of raw decoded events (signals, CAN-TP, containers)
+   - Stateless: Does NOT track signal changes (old→new values)
+   - Can be reused in different contexts (GUI, web service, other tools)
+
+B) CLI APPLICATION (Built on top of library)
+   - Uses decoder library via public API
+   - Adds all higher-level features:
+     * Signal change tracking and binding (first-message-ID strategy)
+     * Event detection and state machines
+     * Expression evaluation
+     * Callback system (C FFI)
+     * Report generation
+     * Multi-file orchestration
+
+DESIGN RATIONALE:
+- Clean separation allows different applications to reuse decoder
+- Decoder can be tested independently
+- Different config strategies (TOML, JSON, GUI) can use same decoder
+- Future extensibility (new file formats only touch decoder layer)
+
+
+4.2) CRATE STRUCTURE
+--------------------
+
+can-log-decoder/       (Library crate - decoder only)
+├── src/
+│   ├── formats/       (BLF, MF4 parsers)
+│   ├── signals/       (DBC, ARXML parsers)
+│   ├── cantp/         (CAN-TP reconstructor)
+│   ├── container/     (Container PDU decoder)
+│   └── lib.rs         (Public API)
+
+can-log-cli/           (Binary crate - application logic)
+├── src/
+│   ├── config/        (TOML parsing)
+│   ├── state/         (Signal change tracking, binding)
+│   ├── events/        (Event state machines, expressions)
+│   ├── callbacks/     (C FFI system)
+│   ├── report/        (TXT/HTML generation)
+│   └── main.rs
+
+can-log-api/           (Optional: C header for callbacks)
+└── can_log_reader_api.h
+
+
+4.3) CORE DECODER LIBRARY - PUBLIC API
+---------------------------------------
+
+4.3.1) Core Types:
+
+pub enum DecodedEvent {
+    // Decoded CAN message with current signal values
+    Message {
+        timestamp: Timestamp,        // Absolute timestamp from log
+        channel: u8,                 // CAN channel number
+        can_id: u32,                 // CAN message ID
+        message_name: Option<String>,// From DBC/ARXML
+        sender: Option<String>,      // ECU name from DBC/ARXML
+        signals: Vec<DecodedSignal>, // All signals in this message
+        is_multiplexed: bool,        // True if message contains mux signals
+        multiplexer_value: Option<u64>, // Active multiplexer value (if muxed)
+    },
+
+    // Reconstructed CAN-TP message (raw payload)
+    CanTpMessage {
+        timestamp: Timestamp,        // Timestamp of first/last frame
+        channel: u8,
+        source_addr: u32,
+        target_addr: u32,
+        payload: Vec<u8>,           // Complete reassembled payload
+    },
+
+    // Unpacked AUTOSAR container PDU with fully decoded contents
+    ContainerPdu {
+        timestamp: Timestamp,
+        channel: u8,
+        container_id: u32,
+        container_name: Option<String>,
+        container_type: ContainerType,  // Static/Dynamic/Queued
+        contained_messages: Vec<ContainedMessage>,
+    },
+
+    // Optional: Raw CAN frame (if requested)
+    RawFrame {
+        timestamp: Timestamp,
+        channel: u8,
+        can_id: u32,
+        data: Vec<u8>,
+    },
+}
+
+pub enum ContainerType {
+    Static,   // Fixed layout
+    Dynamic,  // Variable layout with headers
+    Queued,   // Multiple instances queued
+}
+
+pub struct ContainedMessage {
+    pub pdu_id: u32,
+    pub pdu_name: Option<String>,
+    pub signals: Vec<DecodedSignal>,  // Fully decoded signals
+    pub is_multiplexed: bool,
+    pub multiplexer_value: Option<u64>,
+}
+
+pub struct DecodedSignal {
+    pub name: String,
+    pub value: SignalValue,           // Current value only (no history)
+    pub unit: Option<String>,
+    pub value_description: Option<String>, // e.g., "0=Off, 1=On"
+}
+
+pub enum SignalValue {
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+}
+
+4.3.2) Decoder Configuration (Minimal):
+
+pub struct DecoderConfig {
+    // What to decode
+    pub decode_signals: bool,           // false = only raw frames
+    pub cantp_pairs: Vec<(u32, u32)>,   // Address pairs to reconstruct
+    pub container_ids: Vec<u32>,        // Which containers to unpack
+
+    // Optional performance filters
+    pub channel_filter: Option<Vec<u8>>,  // Only decode these channels
+    pub message_filter: Option<Vec<u32>>, // Only decode these CAN IDs
+}
+
+4.3.3) Main Decoder Interface:
+
+pub struct Decoder {
+    // Internal: signal database, parsers, etc.
+}
+
+impl Decoder {
+    pub fn new() -> Self;
+
+    // Load signal definitions
+    pub fn add_dbc(&mut self, path: &Path) -> Result<()>;
+    pub fn add_arxml(&mut self, path: &Path) -> Result<()>;
+
+    // Decode a log file - returns iterator of events
+    pub fn decode_file(
+        &self,
+        path: &Path,
+        config: DecoderConfig
+    ) -> Result<impl Iterator<Item = Result<DecodedEvent>>>;
+}
+
+4.3.4) What Decoder Does NOT Do:
+- Track signal value changes (old→new)
+- Calculate deltas/timestamps from previous changes
+- Detect events or evaluate expressions
+- Execute callbacks
+- Generate reports
+- Filter based on business logic
+
+All higher-level logic is in the CLI application layer.
+
+
+4.4) CLI APPLICATION ARCHITECTURE
+----------------------------------
+
+┌─────────────────────────────────────────────────────┐
+│                   CLI Entry Point                    │
+│          (config.toml parsing, arguments)            │
+└──────────────────────┬──────────────────────────────┘
+                       │
+        ┌──────────────┴──────────────┐
+        │                             │
+┌───────▼────────┐          ┌─────────▼────────┐
+│  Configuration  │          │   File Discovery │
+│     Module      │          │   & Scheduling   │
+└───────┬────────┘          └─────────┬────────┘
+        │                             │
+        └──────────┬──────────────────┘
+                   │
+════════════════════╪═════════════════════════════════
+         LIBRARY BOUNDARY (uses can-log-decoder crate)
+════════════════════╪═════════════════════════════════
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   Core Decoder Library              │
+        │   (Stateless, reusable)             │
+        │   - BLF/MF4 parsing                 │
+        │   - DBC/ARXML signal database       │
+        │   - Message decoding                │
+        │   - CAN-TP reconstruction           │
+        │   - Container PDU unpacking         │
+        │   Returns: Iterator<DecodedEvent>   │
+        └──────────┬──────────────────────────┘
+                   │
+════════════════════╪═════════════════════════════════
+         APPLICATION LAYER (CLI-specific logic)
+════════════════════╪═════════════════════════════════
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   Signal Binding & Change Tracker   │
+        │   - First-message-ID binding        │
+        │   - Old→new value tracking          │
+        │   - Delta calculations              │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────────────────────┐
+        │      Event Tracking Engine          │
+        │   - Expression evaluator            │
+        │   - Event state machines            │
+        │   - Parent-child relationships      │
+        │   - Multiple instance tracking      │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────┴──────────────┐
+        │                         │
+┌───────▼─────────┐      ┌────────▼────────┐
+│ Callback Engine │      │ Report Generator│
+│   (C FFI)      │      │  (TXT/HTML)     │
+└───────┬─────────┘      └────────┬────────┘
+        │                         │
+        └──────────┬──────────────┘
+                   │
+        ┌──────────▼──────────────┐
+        │   File Output           │
+        │   (Reports, Summaries)  │
+        └─────────────────────────┘
+
+
+4.5) MULTI-THREADING MODEL
+--------------------------
+- Main thread: CLI parsing, config loading, file discovery
+- Worker threads: One per log file (fully independent)
+  * Each worker uses decoder library to process its file
+  * Signal binding/tracking per worker (no shared state)
+  * Event tracking per worker
+  * Callbacks executed in worker context
+- Worker output: Returns FileSummary struct to main thread
+- Main thread: Aggregates summaries, generates multi-file report
+- Read-only sharing: Signal database loaded once, shared across threads
+
+
+4.6) KEY DESIGN PRINCIPLES
+---------------------------
+- Library/Application Separation: Clean boundary for reusability
+- Configurability: Most features configurable via config.toml
+- No recompilation: Event conditions use expression language
+- Extensibility: C callbacks for complex custom logic
+- Performance: Parallel processing, efficient signal lookup
+- Usability: Simple for common cases, powerful for complex scenarios
+- Robustness: Handle incomplete/corrupted traces gracefully
+- Stateless Core: Decoder library has no state, application layer manages state
+
+
+5) CONFIGURATION (config.toml)
+================================================================================
+
+5.1) CONFIGURATION STRUCTURE
+-----------------------------
+
+[input]
+files = ["path/to/log1.blf", "path/to/log2.mf4"]  # or directory path
+dbc_files = ["powertrain.dbc", "diagnostics.dbc"]
+arxml_files = []  # optional
+
+[signals]
+# Simple list of signal names to track, or "all"
+track = ["EngineSpeed", "VehicleSpeed", "BatteryVoltage"]
+# or
+# track = "all"
+
+# Note: No domain/priority config needed - uses "first-message-ID wins" strategy
+
+[callbacks]
+# Optional: Path to user-compiled C callback library
+library = "path/to/user_callbacks.dll"  # Windows
+# library = "path/to/user_callbacks.so"  # Linux
+
+# Simple declarative callbacks (no compilation needed)
+[[callbacks.simple]]
+signal = "EngineSpeed"
+condition = "value > 6000"
+action = "append_message"
+message = "WARNING: Engine overspeed detected!"
+
+[[callbacks.simple]]
+signal = "BatteryVoltage"
+condition = "value < 11.5"
+action = "start_event"
+event = "LowVoltageCondition"
+
+# C callback function mappings (requires library above)
+[[callbacks.c_function]]
+signal = "DiagnosticRequest"
+function = "handle_diagnostic_request"  # function name in .dll/.so
+
+[[events]]
+name = "ChargingSession"
+start_condition = "ChargeRequest == 1"
+end_condition = "ChargeComplete == 1"
+error_condition = "V2G_Session_Error != 0"
+# Optional fields:
+# parent_event = "ParentEventName"
+# allow_multiple_instances = true
+# capture_signals_on_end = ["BatterySOC", "ChargeTime"]
+
+[[events]]
+name = "SLAC"
+start_condition = "SLAC_Status == 1"
+end_condition = "SLAC_Status == 3"
+error_condition = "SLAC_Status == 255 || time_since_start() > 5.0"
+parent_event = "ChargingSession"
+allow_multiple_instances = true  # Can retry multiple times
+
+[cantp]
+# HYBRID APPROACH: Use explicit pairs for known diagnostics,
+# optionally enable auto-detect for discovery
+
+# Option 1: Explicit pairs (recommended for production)
+[[cantp.pairs]]
+source = 0x7E0
+target = 0x7E8
+name = "ECU_Diagnostics"  # optional, for documentation
+
+[[cantp.pairs]]
+source = 0x7E1
+target = 0x7E9
+name = "TCU_Diagnostics"
+
+# Option 2: Auto-detection (exploratory mode)
+# auto_detect = true  # Uncomment to scan and find CAN-TP pairs automatically
+
+# Option 3: Hybrid (both)
+# Combine explicit pairs above with auto_detect = true to find additional pairs
+
+# Flow control timeouts (optional, defaults shown)
+# timeout_ms = 1000  # Max time to wait between frames
+# max_wait_frames = 10  # Max flow control wait frames to handle
+
+[output]
+format = "txt"  # or "html"
+output_dir = "./reports"
+include_basic_info = false  # Optional: show CAN channel mapping in report
+
+[filtering]
+# Report-level filtering (optional)
+# Filters what appears in report, does NOT create new log files
+# channels = [0, 1]  # Only show messages from these CAN channels
+# message_ids = [0x123, 0x456, 0x789]  # Only show these CAN IDs
+# If both specified, message must match both conditions
+
+
+6) OPEN QUESTIONS (TO BE RESOLVED)
+================================================================================
+Question 4: AUTOSAR Container PDU types to support - RESOLVED
+           - Support ALL container types: Static, Dynamic, Queued
+           - Fully decode contained PDUs to signals
+           - Support multiplexed signals in both regular and contained PDUs
+
+Question 5: CAN-TP configuration approach - RESOLVED
+           - Hybrid approach: explicit pairs + optional auto-detection
+           - Explicit pairs for production (fast, deterministic)
+           - Auto-detect mode for exploration/discovery
+           - Can combine both approaches
+           - ISO-TP flow control support with configurable timeouts
+
+Question 6: HTML output and filtering - RESOLVED
+           - HTML: Basic static HTML with CSS styling (no JavaScript)
+           - Filtering: Report-level only (does NOT create new log files)
+           - Filter by channel and/or message ID
+           - Filters affect RAW section visibility, not event detection
+
+Question 7: Basic Info feature implementation - RESOLVED
+           - Optional section in config.toml (include_basic_info flag)
+           - When enabled, appears as first section in report
+           - Shows CAN channel mapping with frame counts
+           - Disabled by default for focused production reports
+           - Useful for exploratory analysis and debugging
+
+ALL OPEN QUESTIONS RESOLVED!
+
+
+7) DELIVERABLES
+================================================================================
+7.1) Compiled CLI tool (Windows executable)
+7.2) Header file: can_log_reader_api.h (for C callback development)
+7.3) Build script template for compiling C callbacks
+7.4) Example callback implementations
+7.5) Example config.toml with comments
+7.6) User documentation
+
+
+8) EXAMPLE USE CASES
+================================================================================
+
+Use Case 1: EV Charging Session Analysis
+-----------------------------------------
+Goal: Track charging sessions across multiple vehicle logs, identify SLAC
+      connection issues
+
+Configuration:
+- Multiple log files from different vehicles
+- Events: ChargingSession (parent), PLCBoot (child), SLAC (child, multiple instances)
+- SLAC can fail and retry
+- Parent error if any child fails or V2G_Session_Error signal != 0
+
+Output:
+- Per-vehicle detailed reports with all SLAC retry attempts
+- Aggregate summary showing SLAC success rates across fleet
+- Identification of vehicles with persistent SLAC failures
+
+Use Case 2: Diagnostic Session with UDS
+----------------------------------------
+Goal: Parse CAN-TP UDS diagnostic messages, track session lifecycle
+
+Configuration:
+- CAN-TP reconstruction for address pair 0x7E0/0x7E8
+- C callback to parse UDS payload (service IDs, data)
+- Events: DiagnosticSession, ECU_Reset, DTC_Read
+- Callback appends decoded UDS info to RAW section
+
+Output:
+- RAW section shows reconstructed UDS requests/responses with decoded content
+- Summary shows diagnostic session outcome and duration
+- Any UDS negative responses trigger event errors
+
+Use Case 3: Data Mining - Gear Shift Patterns
+----------------------------------------------
+Goal: Analyze gear shift timing across 100+ recorded drives
+
+Configuration:
+- Folder with 100+ log files, recursive scan
+- Event: GearShift (multiple instances, no parent)
+- Track signals: GearPosition, ClutchPressed, EngineSpeed, VehicleSpeed
+- Capture all 4 signals at each gear shift completion
+
+Output:
+- Multi-file summary with aggregate statistics:
+  * Total gear shifts across all files
+  * Average shift duration
+  * Files with incomplete shifts (clutch pressed but no gear change)
+- Per-file reports for detailed investigation
+
+
+10) IMPLEMENTATION NOTES - MF4 PARSER
+================================================================================
+
+10.1) MF4/MDF4 FILE FORMAT SUPPORT
+-----------------------------------
+MF4 (Measurement Data Format 4) is an ASAM standard format for automotive
+measurement data. The implementation uses FFI (Foreign Function Interface)
+bindings to the mdflib C++ library for robust MDF4 parsing.
+
+10.2) ARCHITECTURE
+------------------
+Layer 1: Rust Application (mf4.rs)
+  - Public API matching BLF parser interface
+  - Iterator pattern over CanFrame objects
+  - Safe resource management via RAII (Drop trait)
+
+Layer 2: Rust FFI Bindings (mf4_ffi.rs)
+  - Type-safe Rust wrappers around C API
+  - Error handling with MdfError enum
+  - Opaque handle types for cross-language safety
+
+Layer 3: C API Wrapper (mdf_c_api.cpp/h)
+  - Simplified C interface bridging Rust ↔ C++ mdflib
+  - Functions: mdf_open(), mdf_close(), mdf_create_can_iterator(), mdf_iterator_next()
+  - Error reporting via thread-local error messages
+
+Layer 4: mdflib C++ Library
+  - Professional MDF4 parser (https://github.com/ihedvall/mdflib)
+  - Full MDF 3.x and 4.x support (up to version 4.2)
+  - Handles compression, complex channel types, attachments
+
+10.3) DEPENDENCIES
+------------------
+Build Dependencies:
+- cmake (0.1) - For compiling mdflib C++ library
+- cc (1.0) - For compiling C++ wrapper code
+- vcpkg - Package manager for C++ dependencies
+
+Runtime Dependencies (statically linked):
+- mdflib - C++ MDF4 parser library
+- ZLIB (1.3.1) - Compression support (via vcpkg)
+- EXPAT (2.7.3) - XML parsing support (via vcpkg)
+
+System Libraries (Windows):
+- ws2_32, advapi32, userenv - Windows system libraries
+- MSVC C++ runtime (static linkage for portability)
+
+10.4) BUILD PROCESS
+-------------------
+Automated via build.rs:
+1. Detect vcpkg installation (C:\Users\<user>\vcpkg by default)
+2. Configure CMake with vcpkg toolchain for dependencies
+3. Compile mdflib as static library (Release mode, /MT runtime)
+4. Compile C API wrapper (mdf_c_api.cpp) with C++17
+5. Link everything into final Rust binary
+
+Result: Single executable with embedded mdflib (no external DLLs required)
+
+10.5) VCPKG SETUP (One-time)
+-----------------------------
+Installation commands (Windows):
+  cd C:\Users\<user>
+  git clone https://github.com/Microsoft/vcpkg.git
+  cd vcpkg
+  .\bootstrap-vcpkg.bat
+  .\vcpkg install zlib:x64-windows-static expat:x64-windows-static
+
+The build system automatically detects vcpkg and uses installed dependencies.
+
+10.6) CURRENT IMPLEMENTATION STATUS
+------------------------------------
+✓ Complete: FFI architecture, C API wrapper, Rust bindings
+✓ Complete: Build system with CMake and vcpkg integration
+✓ Complete: File opening, MDF4 validation, CAN data detection
+✓ Complete: Release builds compile successfully
+
+Pending: Complete CAN frame extraction from mdflib channel observers
+        (C API iterator currently returns stub data)
+
+Test Status: Release builds work; test builds have runtime library
+            mismatch (/MT vs /MD) - known issue, non-blocking
+
+10.7) USAGE
+-----------
+Identical to BLF parser from application perspective:
+
+    let iterator = Mf4Parser::parse(Path::new("log.mf4"))?;
+    for frame in iterator {
+        let can_frame = frame?;
+        // Process CAN frame (timestamp, ID, data, channel, flags)
+    }
+
+Both BLF and MF4 parsers implement unified LogFileParser trait, ensuring
+consistent behavior across different log file formats.
+
+10.8) FUTURE ENHANCEMENTS
+-------------------------
+- Complete CAN data extraction in mdf_iterator_next() implementation
+- Add MF4 test files for integration testing
+- Fix test build runtime library configuration
+- Support for additional MDF4 bus types (FlexRay, LIN, Ethernet)
+- Optional: Parse MDF4 metadata and attachments
+
+
+================================================================================
+END OF SPECIFICATION
+================================================================================

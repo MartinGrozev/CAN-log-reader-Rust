@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio 2022 Version 17.14.9 (July 2025).
+Copyright (C) Microsoft Corp. All rights reserved.
+Build started at 17:06...
+1>------ Build started: Project: mdflib, Configuration: Release x64 ------
+1>cn3block.cpp
+1>ethconfigadapter.cpp
+1>expatxml.cpp
+1>fh4block.cpp
+1>C:\Users\HP\Rust\mdflib-main\mdflib\src\expatxml.h(9,10): error C1083: Cannot open include file: 'expat.h': No such file or directory
+1>(compiling source file 'src/expatxml.cpp')
+1>horevision.cpp
+1>isampleobserver.cpp
+1>ixmlfile.cpp
+1>C:\Users\HP\Rust\mdflib-main\mdflib\src\expatxml.h(9,10): error C1083: Cannot open include file: 'expat.h': No such file or directory
+1>(compiling source file 'src/ixmlfile.cpp')
+1>ixmlnode.cpp
+1>C:\Users\HP\Rust\mdflib-main\mdflib\src\xmlnode.h(9,10): error C1083: Cannot open include file: 'expat.h': No such file or directory
+1>(compiling source file 'src/ixmlnode.cpp')
+1>ld4block.cpp
+1>mdfblock.cpp
+1>platform.cpp
+1>xmlnode.cpp
+1>C:\Users\HP\Rust\mdflib-main\mdflib\src\xmlnode.h(9,10): error C1083: Cannot open include file: 'expat.h': No such file or directory
+1>(compiling source file 'src/xmlnode.cpp')
+1>zlibutil.cpp
+1>C:\Users\HP\Rust\mdflib-main\mdflib\src\zlibutil.cpp(7,10): error C1083: Cannot open include file: 'zlib.h': No such file or directory
+1>Done building project "mdflib.vcxproj" -- FAILED.
+2>------ Build started: Project: mdflibrary, Configuration: Release x64 ------
+2>at4block.obj : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+2>LINK : fatal error LNK1181: cannot open input file 'C:\Users\HP\Rust\mdflib-main\mdflib\x64\Release\expatxml.obj'
+2>Done building project "mdflibrary.vcxproj" -- FAILED.
+========== Build: 0 succeeded, 2 failed, 0 up-to-date, 0 skipped ==========
+========== Build completed at 17:06 and took 12,091 seconds ==========

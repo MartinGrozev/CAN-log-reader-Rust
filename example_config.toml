@@ -1,0 +1,111 @@
+# CAN Log Reader Configuration Example
+# This file demonstrates all available configuration options
+
+[input]
+# Files to process - can be individual files or directories
+files = ["trace.blf", "data/recording.mf4"]
+
+# DBC files for signal definitions (can specify multiple)
+dbc_files = ["powertrain.dbc", "diagnostics.dbc"]
+
+# ARXML files for AUTOSAR signal definitions (optional)
+arxml_files = []  # ["system.arxml"]
+
+[signals]
+# Signals to track - can be a list of specific signal names or "all"
+track = ["EngineSpeed", "VehicleSpeed", "BatteryVoltage", "GearPosition"]
+# track = "all"  # Uncomment to track all signals
+
+# Note: Uses "first-message-ID wins" strategy for signal binding
+# No domain/priority configuration needed
+
+[output]
+# Output format: "txt" or "html"
+format = "txt"
+
+# Output directory for reports
+output_dir = "./reports"
+
+# Include CAN channel mapping section in report (default: false)
+include_basic_info = false
+
+[cantp]
+# CAN-TP (ISO-TP) configuration - supports explicit pairs and auto-detection
+
+# Explicit address pairs (recommended for production)
+[[cantp.pairs]]
+source = 0x7E0
+target = 0x7E8
+name = "ECU_Diagnostics"  # Optional name for documentation
+
+[[cantp.pairs]]
+source = 0x7E1
+target = 0x7E9
+name = "TCU_Diagnostics"
+
+# Auto-detection mode (for exploration)
+# auto_detect = true  # Uncomment to enable automatic CAN-TP pair detection
+
+# Timeout in milliseconds (default: 1000)
+timeout_ms = 1000
+
+[filtering]
+# Report-level filtering (optional)
+# Filters what appears in the report - does NOT create new log files
+
+# Only show messages from these CAN channels
+# channels = [0, 1]
+
+# Only show these specific CAN message IDs
+# message_ids = [0x123, 0x456, 0x789]
+
+# If both specified, message must match both conditions
+
+[callbacks]
+# Optional: Path to user-compiled C callback library
+# library = "path/to/user_callbacks.dll"  # Windows
+# library = "path/to/user_callbacks.so"   # Linux
+
+# Simple declarative callbacks (no compilation needed)
+[[callbacks.simple]]
+signal = "EngineSpeed"
+condition = "value > 6000"
+action = "append_message"
+message = "WARNING: Engine overspeed detected!"
+
+[[callbacks.simple]]
+signal = "BatteryVoltage"
+condition = "value < 11.5"
+action = "start_event"
+event = "LowVoltageCondition"
+
+# C callback function mappings (requires library above)
+# [[callbacks.c_function]]
+# signal = "DiagnosticRequest"
+# function = "handle_diagnostic_request"  # Function name in .dll/.so
+
+# Event definitions
+[[events]]
+name = "ChargingSession"
+start_condition = "ChargeRequest == 1"
+end_condition = "ChargeComplete == 1"
+error_condition = "V2G_Session_Error != 0 || time_since_event_start() > 300.0"
+# Capture signal values when event ends successfully
+capture_signals_on_end = ["BatterySOC", "TotalEnergyDelivered"]
+# Capture diagnostic context when error occurs
+capture_signals_on_error = ["BatterySOC", "ChargingCurrent", "ChargingVoltage", "ConnectionState"]
+
+[[events]]
+name = "SLAC"
+start_condition = "SLAC_Status == 1"
+end_condition = "SLAC_Status == 3"
+error_condition = "(SLAC_Status == 255) || (time_since_event_start() > 5.0 && SLAC_Status != 3)"
+parent_event = "ChargingSession"
+allow_multiple_instances = true  # Can retry multiple times
+capture_signals_on_error = ["SLAC_Status", "SLAC_RetryCount", "SignalStrength"]
+
+[[events]]
+name = "HighSpeedDriving"
+start_condition = "VehicleSpeed > 100"
+end_condition = "VehicleSpeed <= 100"
+# No error condition - this event just tracks duration
