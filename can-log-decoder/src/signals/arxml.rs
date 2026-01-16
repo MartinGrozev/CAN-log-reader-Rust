@@ -85,18 +85,30 @@ impl ArxmlParser {
             let element_name = element.element_name();
             match element_name {
                 ElementName::ISignalIPdu => {
-                    if let Some(msg) = self.parse_i_signal_i_pdu(&element)? {
-                        self.messages.push(msg);
+                    match self.parse_i_signal_i_pdu(&element) {
+                        Ok(Some(msg)) => self.messages.push(msg),
+                        Ok(None) => {}, // Skipped (no CAN ID, etc)
+                        Err(e) => {
+                            log::warn!("Failed to parse I-SIGNAL-I-PDU: {} (continuing...)", e);
+                        }
                     }
                 }
                 ElementName::MultiplexedIPdu => {
-                    if let Some(msg) = self.parse_multiplexed_i_pdu(&element)? {
-                        self.messages.push(msg);
+                    match self.parse_multiplexed_i_pdu(&element) {
+                        Ok(Some(msg)) => self.messages.push(msg),
+                        Ok(None) => {},
+                        Err(e) => {
+                            log::warn!("Failed to parse MULTIPLEXED-I-PDU: {} (continuing...)", e);
+                        }
                     }
                 }
                 ElementName::ContainerIPdu => {
-                    if let Some(container) = self.parse_container_i_pdu(&element)? {
-                        self.containers.push(container);
+                    match self.parse_container_i_pdu(&element) {
+                        Ok(Some(container)) => self.containers.push(container),
+                        Ok(None) => {},
+                        Err(e) => {
+                            log::warn!("Failed to parse CONTAINER-I-PDU: {} (continuing...)", e);
+                        }
                     }
                 }
                 _ => {}
@@ -563,8 +575,11 @@ impl ArxmlParser {
     // Helper methods for navigating autosar-data elements
 
     fn get_short_name(&self, element: &Element) -> Result<String> {
+        let element_type = element.element_name();
         self.get_sub_element_text(element, "SHORT-NAME")?
-            .ok_or_else(|| DecoderError::ArxmlParseError("Missing SHORT-NAME".to_string()))
+            .ok_or_else(|| DecoderError::ArxmlParseError(
+                format!("Missing SHORT-NAME in element type: {:?}", element_type)
+            ))
     }
 
     fn get_sub_element_text(&self, element: &Element, name: &str) -> Result<Option<String>> {

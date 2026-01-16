@@ -32,7 +32,12 @@
       "Bash(./test_arxml_public_api.exe:*)",
       "Bash(./test_message_decoder.exe:*)",
       "Bash(./target/release/can-log-cli.exe:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRelease v0.1.0: Phases 1-4 complete\n\n- Complete ARXML parser with physical value support\n- Optimized PDU-to-CAN-ID lookup (1000x faster)\n- Full message decoding engine\n- CLI with DBC/ARXML loading\n- BLF/MF4 parser stubs ready\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git config:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

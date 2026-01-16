@@ -13,10 +13,23 @@ use std::path::Path;
 pub fn parse_dbc_file(path: &Path) -> Result<Vec<MessageDefinition>> {
     log::info!("Parsing DBC file: {:?}", path);
 
-    // Read the DBC file
-    let dbc_content = std::fs::read_to_string(path).map_err(|e| {
+    // Read the DBC file as bytes first (handle non-UTF8 encodings)
+    let bytes = std::fs::read(path).map_err(|e| {
         DecoderError::DbcParseError(format!("Failed to read file {:?}: {}", path, e))
     })?;
+
+    // Try UTF-8 first, then fallback to Latin-1/Windows-1252 encoding
+    let dbc_content = String::from_utf8(bytes.clone())
+        .or_else(|_| {
+            // Try Latin-1 encoding (compatible with Windows-1252)
+            log::warn!("DBC file is not UTF-8, trying Latin-1 encoding");
+            Ok::<String, std::string::FromUtf8Error>(
+                bytes.iter().map(|&b| b as char).collect()
+            )
+        })
+        .map_err(|e| {
+            DecoderError::DbcParseError(format!("Failed to decode file {:?}: {}", path, e))
+        })?;
 
     // Parse using can-dbc crate
     let dbc = can_dbc::DBC::from_slice(dbc_content.as_bytes()).map_err(|e| {
