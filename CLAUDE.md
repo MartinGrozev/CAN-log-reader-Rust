@@ -285,6 +285,61 @@ Phase 4: Message Decoding Engine 🚀 → **COMPLETED IN SAME SESSION!** ✅
 
 ---
 
+### Session 7 (2026-01-16) - ARXML Parser Bug Fixes 🐛✅
+**Problem:** ARXML parser was failing to extract signals - returning 0 messages/signals
+**Root Cause:** Misusing `autosar-data` as generic XML DOM instead of typed AUTOSAR API
+
+**Critical Fixes:**
+1. ✅ **SHORT-NAME Access** (`arxml.rs:572-579`)
+   - **Before:** `get_sub_element_text(element, "SHORT-NAME")` (wrong - treated SHORT-NAME as generic child)
+   - **After:** `element.item_name()` (correct - typed API for identifiable elements)
+   - **Why:** autosar-data exposes SHORT-NAME via `item_name()` method, not as sub-element
+
+2. ✅ **Element Name Comparison** (`arxml.rs:590-623`)
+   - **Before:** `find_sub_element()` compared `item_name()` (SHORT-NAME) against element type
+   - **After:** Parse string to `ElementName` enum, use `element.get_sub_element(element_name)`
+   - **Fixed:** Both `find_sub_element()` and `find_all_sub_elements()` to use typed comparison
+   - **Example:** `"PDU-TO-FRAME-MAPPINGS".parse::<ElementName>()` → `ElementName::PduToFrameMappings`
+
+3. ✅ **CAN ID Mapping Structure** (`arxml.rs:121-176`)
+   - **Problem:** Was looking for IDENTIFIER inside CAN-FRAME (doesn't exist there!)
+   - **Correct Structure:**
+     ```
+     CAN-FRAME-TRIGGERING → IDENTIFIER (CAN ID) + FRAME-REF
+     CAN-FRAME → PDU-TO-FRAME-MAPPING → PDU-REF (PDU name)
+     ```
+   - **Solution:** Two-step mapping:
+     1. Build `frame_path → can_id` map from CAN-FRAME-TRIGGERING elements
+     2. Map `pdu_name → can_id` by traversing CAN-FRAME → PDU-TO-FRAME-MAPPING
+
+**Results:**
+- ✅ **4 messages** parsed successfully (message1, message2, message4, multiplexed_message)
+- ✅ **12 signals** extracted with proper mappings
+- ✅ **1 container** detected (OneToContainThemAll)
+- ✅ **7 PDU-to-CAN-ID mappings** created
+- ✅ Successfully maps CAN IDs: 4, 5, 6, 100, 101, 102, 1001, 1002
+
+**Expected Warnings (Not Errors):**
+- `multiplexed_message_static/0/1` - Sub-PDUs inside multiplexed message (no direct CAN ID)
+- `message3` - Wrapped in SECURED-I-PDU `message3_secured` (correct behavior)
+- "Signal mapping has no I-SIGNAL-REF" - I-SIGNAL-GROUP-REF found (signal groups not yet supported)
+
+**Code Changes:**
+- Modified: `can-log-decoder/src/signals/arxml.rs` (~100 lines changed)
+- Commit: `053da0b` - "Fix ARXML signal mapping parsing"
+- Pushed to GitHub ✅
+
+**Key Learnings:**
+- `autosar-data` is NOT a generic XML parser - it's a schema-aware AUTOSAR API
+- Use typed accessors: `item_name()`, `element_name()`, `get_sub_element(ElementName)`
+- AUTOSAR structure has indirection: CAN-FRAME-TRIGGERING links IDs to frames
+- Element names are PascalCase enums, not hyphenated strings
+
+**Next Session:**
+Phase 5: CAN-TP Reconstruction OR Phase 6: Container PDU signal extraction 🚀
+
+---
+
 ### Session 6 (continued) - Phase 4 COMPLETE ✅🎯
 **Completed:**
 - ✅ **PHASE 4 COMPLETE**: Message Decoding Engine
