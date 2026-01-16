@@ -118,24 +118,60 @@ impl ArxmlParser {
         Ok(())
     }
 
-    /// Build a lookup map of PDU name → CAN ID by scanning all PDU-TO-FRAME-MAPPINGs once
+    /// Build a lookup map of PDU name → CAN ID by scanning all CAN-FRAME-TRIGGERINGs once
+    ///
+    /// AUTOSAR structure:
+    /// CAN-FRAME-TRIGGERING → IDENTIFIER (CAN ID) + FRAME-REF
+    /// CAN-FRAME → PDU-TO-FRAME-MAPPING → PDU-REF (PDU name)
     fn build_pdu_to_can_id_map(&mut self) -> Result<()> {
-        for (_depth, element) in self.model.elements_dfs() {
-            if element.element_name() == ElementName::PduToFrameMapping {
-                // Get the PDU reference
-                if let Some(pdu_ref) = self.find_sub_element(&element, "PDU-REF")? {
-                    if let Some(ref_text) = pdu_ref.character_data() {
-                        let pdu_path = ref_text.string_value().unwrap_or_default();
-                        let pdu_name = pdu_path.split('/').last().unwrap_or("");
+        // Step 1: Build FRAME-REF → CAN-ID map from CAN-FRAME-TRIGGERINGs
+        let mut frame_to_can_id = std::collections::HashMap::new();
 
-                        // Get the CAN ID from the frame
-                        if let Some(can_id) = self.get_can_id_from_frame_mapping(&element) {
-                            self.pdu_to_can_id.insert(pdu_name.to_string(), can_id);
+        for (_depth, element) in self.model.elements_dfs() {
+            if element.element_name() == ElementName::CanFrameTriggering {
+                // Get IDENTIFIER (CAN ID)
+                if let Some(id_text) = self.get_sub_element_text(&element, "IDENTIFIER")? {
+                    if let Some(can_id) = self.parse_can_id(&id_text) {
+                        // Get FRAME-REF (link to CAN-FRAME)
+                        if let Some(frame_ref) = self.find_sub_element(&element, "FRAME-REF")? {
+                            if let Some(ref_text) = frame_ref.character_data() {
+                                let frame_path = ref_text.string_value().unwrap_or_default();
+                                frame_to_can_id.insert(frame_path.clone(), can_id);
+                            }
                         }
                     }
                 }
             }
         }
+
+        // Step 2: Map PDU name → CAN ID by finding PDU-TO-FRAME-MAPPINGs
+        for (_depth, element) in self.model.elements_dfs() {
+            if element.element_name() == ElementName::CanFrame {
+                // Get this frame's AUTOSAR path
+                if let Ok(frame_path) = element.path() {
+                    // Look up CAN ID for this frame
+                    if let Some(&can_id) = frame_to_can_id.get(&frame_path) {
+                        // Find all PDU-TO-FRAME-MAPPINGs in this frame
+                        if let Some(mappings) = self.find_sub_element(&element, "PDU-TO-FRAME-MAPPINGS")? {
+                            for mapping in self.find_all_sub_elements(&mappings, "PDU-TO-FRAME-MAPPING")? {
+                                // Get PDU-REF
+                                if let Some(pdu_ref) = self.find_sub_element(&mapping, "PDU-REF")? {
+                                    if let Some(ref_text) = pdu_ref.character_data() {
+                                        let pdu_path = ref_text.string_value().unwrap_or_default();
+                                        let pdu_name = pdu_path.split('/').last().unwrap_or("");
+
+                                        if !pdu_name.is_empty() {
+                                            self.pdu_to_can_id.insert(pdu_name.to_string(), can_id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -558,23 +594,6 @@ impl ArxmlParser {
         Ok(None)
     }
 
-    fn get_can_id_from_frame_mapping(&self, mapping: &Element) -> Option<u32> {
-        // Navigate up to find CAN-FRAME with IDENTIFIER
-        if let Ok(Some(parent)) = mapping.parent() {
-            if let Ok(Some(grandparent)) = parent.parent() {
-                // Look for CAN-FRAME in the parent hierarchy
-                if let Ok(can_frames) = self.find_all_sub_elements(&grandparent, "CAN-FRAME") {
-                    for frame in can_frames {
-                        if let Ok(Some(id_text)) = self.get_sub_element_text(&frame, "IDENTIFIER") {
-                            return self.parse_can_id(&id_text);
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn parse_can_id(&self, text: &str) -> Option<u32> {
         let text = text.trim();
         if text.starts_with("0x") || text.starts_with("0X") {
@@ -588,7 +607,8 @@ impl ArxmlParser {
 
     fn get_short_name(&self, element: &Element) -> Result<String> {
         let element_type = element.element_name();
-        self.get_sub_element_text(element, "SHORT-NAME")?
+        // Use item_name() to get SHORT-NAME from identifiable elements
+        element.item_name()
             .ok_or_else(|| DecoderError::ArxmlParseError(
                 format!("Missing SHORT-NAME in element type: {:?}", element_type)
             ))
@@ -604,32 +624,44 @@ impl ArxmlParser {
     }
 
     fn find_sub_element(&self, element: &Element, name: &str) -> Result<Option<Element>> {
-        // Helper to match element name string
-        for sub_elem in element.sub_elements() {
-            if let Some(elem_name_str) = sub_elem.item_name() {
-                if elem_name_str == name {
-                    return Ok(Some(sub_elem));
-                }
-            }
+        // Use autosar-data's typed API when possible
+        // For named sub-elements (like LENGTH, START-POSITION), we need to parse the string
+        // into an ElementName enum
+        use autosar_data::ElementName;
+
+        // Try to parse name string into ElementName enum
+        if let Ok(element_name) = name.parse::<ElementName>() {
+            // Use typed API (more efficient)
+            return Ok(element.get_sub_element(element_name));
         }
+
+        // Fallback should never be needed since autosar-data has all AUTOSAR element names
+        log::warn!("Failed to parse element name '{}' into ElementName enum", name);
         Ok(None)
     }
 
     fn find_all_sub_elements(&self, element: &Element, name: &str) -> Result<Vec<Element>> {
-        let mut results = Vec::new();
-        for sub_elem in element.sub_elements() {
-            if let Some(elem_name_str) = sub_elem.item_name() {
-                if elem_name_str == name {
+        use autosar_data::ElementName;
+
+        // Parse the string into an ElementName enum
+        if let Ok(target_element_name) = name.parse::<ElementName>() {
+            let mut results = Vec::new();
+            for sub_elem in element.sub_elements() {
+                if sub_elem.element_name() == target_element_name {
                     results.push(sub_elem);
                 }
             }
+            return Ok(results);
         }
-        Ok(results)
+
+        log::warn!("Failed to parse element name '{}' into ElementName enum", name);
+        Ok(Vec::new())
     }
 
     fn find_element_by_short_name(&self, short_name: &str) -> Result<Option<Element>> {
         for (_depth, element) in self.model.elements_dfs() {
-            if let Ok(name) = self.get_short_name(&element) {
+            // Use item_name() directly (more efficient than get_short_name which checks errors)
+            if let Some(name) = element.item_name() {
                 if name == short_name {
                     return Ok(Some(element));
                 }

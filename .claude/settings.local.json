@@ -37,7 +37,10 @@
       "Bash(git config:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(can-log-cli.exe:*)",
+      "Bash(./can-log-cli.exe:*)",
+      "Bash(set RUST_LOG=debug:*)"
     ],
     "deny": [],
     "ask": []
