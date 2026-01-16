@@ -350,7 +350,19 @@ impl ArxmlParser {
     }
 
     fn parse_signal_mapping(&self, mapping: &Element) -> Result<Option<SignalDefinition>> {
-        let signal_name = self.get_short_name(mapping)?;
+        // Get signal name from I-SIGNAL-REF (not from mapping's SHORT-NAME)
+        let signal_name = if let Some(i_signal_ref) = self.find_sub_element(mapping, "I-SIGNAL-REF")? {
+            if let Some(ref_text) = i_signal_ref.character_data() {
+                let signal_path = ref_text.string_value().unwrap_or_default();
+                signal_path.split('/').last().unwrap_or("Unknown").to_string()
+            } else {
+                log::warn!("I-SIGNAL-REF has no character data, skipping mapping");
+                return Ok(None);
+            }
+        } else {
+            log::warn!("Signal mapping has no I-SIGNAL-REF, skipping");
+            return Ok(None);
+        };
 
         let start_position = self
             .get_sub_element_text(mapping, "START-POSITION")?
