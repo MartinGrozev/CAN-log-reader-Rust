@@ -73,6 +73,9 @@ pub enum DecoderError {
     #[error("Invalid signal definition: {0}")]
     InvalidSignalDefinition(String),
 
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
@@ -119,20 +122,18 @@ pub enum DecodedEvent {
         payload_length: usize,
     },
 
-    /// An AUTOSAR container PDU with fully decoded contained messages
+    /// An AUTOSAR container PDU with raw contained PDUs (before signal decoding)
     ContainerPdu {
         /// Absolute timestamp from the log file
         timestamp: Timestamp,
-        /// CAN channel number
-        channel: u8,
         /// Container PDU CAN ID
         container_id: u32,
-        /// Container name from ARXML (if available)
-        container_name: Option<String>,
+        /// Container name from ARXML
+        container_name: String,
         /// Type of container (Static/Dynamic/Queued)
         container_type: ContainerType,
-        /// All contained messages with their decoded signals
-        contained_messages: Vec<ContainedMessage>,
+        /// Raw contained PDUs (before signal decoding)
+        contained_pdus: Vec<ContainedPdu>,
     },
 
     /// A raw CAN frame (optionally emitted if requested in config)
@@ -171,7 +172,18 @@ impl fmt::Display for ContainerType {
     }
 }
 
-/// A message contained within an AUTOSAR container PDU
+/// A PDU contained within an AUTOSAR container (raw data before signal decoding)
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContainedPdu {
+    /// PDU identifier
+    pub pdu_id: u32,
+    /// PDU name from ARXML (if available)
+    pub name: String,
+    /// Raw PDU data bytes
+    pub data: Vec<u8>,
+}
+
+/// A message contained within an AUTOSAR container PDU (after signal decoding)
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContainedMessage {
     /// PDU identifier
@@ -262,13 +274,13 @@ impl DecodedEvent {
         }
     }
 
-    /// Get the CAN channel of this event
-    pub fn channel(&self) -> u8 {
+    /// Get the CAN channel of this event (if applicable)
+    pub fn channel(&self) -> Option<u8> {
         match self {
-            DecodedEvent::Message { channel, .. } => *channel,
-            DecodedEvent::CanTpMessage { channel, .. } => *channel,
-            DecodedEvent::ContainerPdu { channel, .. } => *channel,
-            DecodedEvent::RawFrame { channel, .. } => *channel,
+            DecodedEvent::Message { channel, .. } => Some(*channel),
+            DecodedEvent::CanTpMessage { channel, .. } => Some(*channel),
+            DecodedEvent::ContainerPdu { .. } => None, // Channel not stored in container
+            DecodedEvent::RawFrame { channel, .. } => Some(*channel),
         }
     }
 

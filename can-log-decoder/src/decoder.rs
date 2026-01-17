@@ -5,8 +5,9 @@
 //! decoding log files.
 
 use crate::config::DecoderConfig;
+use crate::container_decoder::ContainerDecoder;
 use crate::signals::SignalDatabase;
-use crate::types::{DecodedEvent, Result};
+use crate::types::{CanFrame, DecodedEvent, Result};
 use std::path::Path;
 
 /// The main decoder struct - entry point for all decoding operations
@@ -121,7 +122,7 @@ impl Decoder {
     pub fn decode_file(
         &self,
         path: &Path,
-        config: DecoderConfig,
+        _config: DecoderConfig,
     ) -> Result<Box<dyn Iterator<Item = Result<DecodedEvent>> + '_>> {
         log::info!("Decoding log file: {:?}", path);
 
@@ -133,13 +134,13 @@ impl Decoder {
         match extension.as_deref() {
             Some("blf") => {
                 log::debug!("Detected BLF file format");
-                // TODO: Implement BLF parser in Phase 3
-                Ok(Box::new(std::iter::empty()))
+                let frame_iter = crate::formats::BlfParser::parse(path)?;
+                Ok(Box::new(DecodingIterator::new(frame_iter, &self.signal_db)))
             }
             Some("mf4") | Some("mdf") => {
                 log::debug!("Detected MF4 file format");
-                // TODO: Implement MF4 parser in Phase 3
-                Ok(Box::new(std::iter::empty()))
+                let frame_iter = crate::formats::Mf4Parser::parse(path)?;
+                Ok(Box::new(DecodingIterator::new(frame_iter, &self.signal_db)))
             }
             _ => {
                 Err(crate::types::DecoderError::LogParseError(
@@ -158,6 +159,108 @@ impl Decoder {
 impl Default for Decoder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Iterator that decodes CAN frames into decoded events
+///
+/// This iterator wraps a frame iterator and processes each frame:
+/// 1. Check if CAN ID is a container → decode container PDU
+/// 2. Check if CAN ID is a message → decode message signals
+/// 3. Otherwise → emit raw frame event
+struct DecodingIterator<'a, I>
+where
+    I: Iterator<Item = Result<CanFrame>>,
+{
+    frame_iter: I,
+    signal_db: &'a SignalDatabase,
+    pending_events: Vec<DecodedEvent>,
+}
+
+impl<'a, I> DecodingIterator<'a, I>
+where
+    I: Iterator<Item = Result<CanFrame>>,
+{
+    fn new(frame_iter: I, signal_db: &'a SignalDatabase) -> Self {
+        Self {
+            frame_iter,
+            signal_db,
+            pending_events: Vec::new(),
+        }
+    }
+
+    /// Process a single CAN frame and generate decoded event(s)
+    fn process_frame(&mut self, frame: CanFrame) -> Result<Option<DecodedEvent>> {
+        let can_id = frame.can_id;
+
+        // Check if this is a container PDU
+        if let Some(container_def) = self.signal_db.get_container(can_id) {
+            log::debug!("Decoding container PDU: {} (ID: 0x{:X})", container_def.name, can_id);
+
+            // Decode container - this returns a Vec of events
+            let container_events = ContainerDecoder::decode_container(&frame, container_def, self.signal_db)?;
+
+            // Split: first event to return, rest go to pending queue
+            let mut events_iter = container_events.into_iter();
+            let first_event = events_iter.next();
+
+            // Store remaining events for later emission
+            self.pending_events.extend(events_iter);
+
+            // Return the first event
+            Ok(first_event)
+        }
+        // Check if this is a regular message
+        else if let Some(_message_def) = self.signal_db.get_message(can_id) {
+            log::debug!("Decoding message: ID 0x{:X}", can_id);
+
+            // TODO: Implement message decoding in future (will use MessageDecoder)
+            // For now, emit as raw frame
+            Ok(Some(DecodedEvent::RawFrame {
+                timestamp: frame.timestamp(),
+                channel: frame.channel,
+                can_id: frame.can_id,
+                data: frame.data,
+                is_fd: frame.is_fd,
+            }))
+        }
+        // Unknown CAN ID - emit as raw frame
+        else {
+            log::trace!("Unknown CAN ID: 0x{:X}, emitting as raw frame", can_id);
+            Ok(Some(DecodedEvent::RawFrame {
+                timestamp: frame.timestamp(),
+                channel: frame.channel,
+                can_id: frame.can_id,
+                data: frame.data,
+                is_fd: frame.is_fd,
+            }))
+        }
+    }
+}
+
+impl<'a, I> Iterator for DecodingIterator<'a, I>
+where
+    I: Iterator<Item = Result<CanFrame>>,
+{
+    type Item = Result<DecodedEvent>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // First, return any pending events from container decoding
+        if let Some(event) = self.pending_events.pop() {
+            return Some(Ok(event));
+        }
+
+        // Get next frame from underlying iterator
+        match self.frame_iter.next()? {
+            Ok(frame) => {
+                match self.process_frame(frame) {
+                    Ok(Some(event)) => Some(Ok(event)),
+                    Ok(None) => self.next(), // No event generated, get next frame
+                    Err(e) => Some(Err(e)),
+                }
+            }
+            Err(e) => Some(Err(e)),
+        }
     }
 }
 

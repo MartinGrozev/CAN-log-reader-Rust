@@ -141,6 +141,10 @@ pub struct SignalDatabase {
     /// Signal name lookup for quick access
     /// Key: Signal name, Value: List of (CAN ID, signal index) tuples
     signal_lookup: HashMap<String, Vec<(u32, usize)>>,
+
+    /// Message name lookup for contained PDUs
+    /// Key: Message name, Value: (CAN ID, message index in messages vector)
+    message_lookup: HashMap<String, (u32, usize)>,
 }
 
 impl SignalDatabase {
@@ -150,6 +154,7 @@ impl SignalDatabase {
             messages: HashMap::new(),
             containers: HashMap::new(),
             signal_lookup: HashMap::new(),
+            message_lookup: HashMap::new(),
         }
     }
 
@@ -164,6 +169,15 @@ impl SignalDatabase {
                 .or_insert_with(Vec::new)
                 .push((can_id, sig_idx));
         }
+
+        // Get the index where this message will be added
+        let msg_idx = self.messages
+            .get(&can_id)
+            .map(|v| v.len())
+            .unwrap_or(0);
+
+        // Add message name lookup (for contained PDU decoding)
+        self.message_lookup.insert(message.name.clone(), (can_id, msg_idx));
 
         // Add message to database
         self.messages
@@ -190,6 +204,15 @@ impl SignalDatabase {
     /// Get container definition by ID
     pub fn get_container(&self, container_id: u32) -> Option<&ContainerDefinition> {
         self.containers.get(&container_id)
+    }
+
+    /// Get message definition by name (for contained PDU decoding)
+    pub fn get_message_by_name(&self, message_name: &str) -> Option<&MessageDefinition> {
+        self.message_lookup
+            .get(message_name)
+            .and_then(|(can_id, msg_idx)| {
+                self.messages.get(can_id).and_then(|msgs| msgs.get(*msg_idx))
+            })
     }
 
     /// Find all messages containing a specific signal name

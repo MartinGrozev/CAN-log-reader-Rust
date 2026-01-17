@@ -59,16 +59,16 @@ pub mod types;
 pub use config::{CanTpPair, DecoderConfig};
 pub use decoder::{DatabaseStats, Decoder};
 pub use types::{
-    ContainedMessage, ContainerType, DecodedEvent, DecodedSignal,
+    ContainedMessage, ContainedPdu, ContainerType, DecodedEvent, DecodedSignal,
     DecoderError, Result, SignalValue, Timestamp,
 };
 
 // Internal modules (not exposed in public API)
 pub mod formats;  // Made public for examples/testing
 mod signals;
-mod message_decoder;
+pub(crate) mod message_decoder;  // Made crate-public for container_decoder
 mod cantp;
-mod container;
+mod container_decoder;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -4,7 +4,7 @@
 //! Uses the autosar-data crate for robust AUTOSAR 4.x support.
 
 use crate::signals::database::{
-    ByteOrder, ContainerDefinition, ContainerLayout, MessageDefinition,
+    ByteOrder, ContainedPduInfo, ContainerDefinition, ContainerLayout, MessageDefinition,
     MultiplexerInfo, SignalDefinition, ValueType,
 };
 use crate::types::{ContainerType, DecoderError, Result};
@@ -344,6 +344,8 @@ impl ArxmlParser {
             .get_sub_element_text(element, "HEADER-TYPE")?
             .unwrap_or_else(|| "NONE".to_string());
 
+        log::debug!("Container {} has HEADER-TYPE: {:?}", name, header_type);
+
         let (container_type, header_size) = if header_type.contains("SHORT-HEADER") {
             (ContainerType::Dynamic, 4)
         } else if header_type.contains("LONG-HEADER") {
@@ -352,9 +354,32 @@ impl ArxmlParser {
             (ContainerType::Static, 0)
         };
 
-        let layout = ContainerLayout::Dynamic {
-            header_size,
-            pdus: Vec::new(), // TODO: Parse contained PDU information
+        // Parse contained PDU information from CONTAINED-PDU-TRIGGERING-REFS
+        let contained_pdus = self.parse_contained_pdus(element, length)?;
+
+        let layout = match container_type {
+            ContainerType::Dynamic => ContainerLayout::Dynamic {
+                header_size,
+                pdus: contained_pdus,
+            },
+            ContainerType::Static => ContainerLayout::Static {
+                pdus: contained_pdus,
+            },
+            ContainerType::Queued => {
+                // For queued containers, all PDUs should be the same type
+                if let Some(first_pdu) = contained_pdus.first() {
+                    ContainerLayout::Queued {
+                        pdu_id: first_pdu.pdu_id,
+                        pdu_size: first_pdu.size,
+                    }
+                } else {
+                    log::warn!("Queued container has no PDUs defined");
+                    ContainerLayout::Dynamic {
+                        header_size: 0,
+                        pdus: Vec::new(),
+                    }
+                }
+            }
         };
 
         Ok(Some(ContainerDefinition {
@@ -364,6 +389,99 @@ impl ArxmlParser {
             layout,
             source: self.source.clone(),
         }))
+    }
+
+    /// Parse contained PDU information from CONTAINED-PDU-TRIGGERING-REFS
+    ///
+    /// The structure is:
+    /// CONTAINER-I-PDU → CONTAINED-PDU-TRIGGERING-REF → PDU-TRIGGERING → I-PDU-REF → I-SIGNAL-I-PDU
+    fn parse_contained_pdus(
+        &self,
+        container_element: &Element,
+        container_length: usize,
+    ) -> Result<Vec<ContainedPduInfo>> {
+        use autosar_data::ElementName;
+
+        let mut contained_pdus = Vec::new();
+        let mut current_position = 0;
+
+        // Find CONTAINED-PDU-TRIGGERING-REFS
+        if let Some(refs_element) = self.find_sub_element(container_element, "CONTAINED-PDU-TRIGGERING-REFS")? {
+            // Get all CONTAINED-PDU-TRIGGERING-REF elements
+            for ref_element in self.find_all_sub_elements(&refs_element, "CONTAINED-PDU-TRIGGERING-REF")? {
+                if let Some(ref_text) = ref_element.character_data() {
+                    let pdu_triggering_path = ref_text.string_value().unwrap_or_default();
+
+                    // Find the PDU-TRIGGERING element by path
+                    if let Some(pdu_triggering) = self.find_element_by_path(&pdu_triggering_path)? {
+                        // Get I-PDU-REF from PDU-TRIGGERING
+                        if let Some(ipdu_ref) = self.find_sub_element(&pdu_triggering, "I-PDU-REF")? {
+                            if let Some(ipdu_ref_text) = ipdu_ref.character_data() {
+                                let ipdu_path = ipdu_ref_text.string_value().unwrap_or_default();
+                                let ipdu_name = ipdu_path.split('/').last().unwrap_or("Unknown");
+
+                                // Try to find the I-PDU to get its LENGTH
+                                let pdu_size = if let Some(ipdu_element) = self.find_element_by_path(&ipdu_path)? {
+                                    self.get_sub_element_text(&ipdu_element, "LENGTH")?
+                                        .and_then(|s| s.parse::<usize>().ok())
+                                        .unwrap_or(8) // Default to 8 bytes if not specified
+                                } else {
+                                    8 // Default size
+                                };
+
+                                // Generate a PDU ID from the name hash (since AUTOSAR doesn't have explicit PDU IDs)
+                                let pdu_id = Self::generate_pdu_id(ipdu_name);
+
+                                contained_pdus.push(ContainedPduInfo {
+                                    pdu_id,
+                                    name: ipdu_name.to_string(),
+                                    position: current_position,
+                                    size: pdu_size,
+                                });
+
+                                current_position += pdu_size;
+
+                                // Check if we've exceeded container length
+                                if current_position > container_length {
+                                    log::warn!(
+                                        "Contained PDUs exceed container length: {} > {}",
+                                        current_position,
+                                        container_length
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(contained_pdus)
+    }
+
+    /// Generate a deterministic PDU ID from a PDU name using a simple hash
+    fn generate_pdu_id(name: &str) -> u32 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        (hasher.finish() & 0xFFFF) as u32 // Use lower 16 bits for PDU ID
+    }
+
+    /// Find an element by its AUTOSAR path
+    fn find_element_by_path(&self, path: &str) -> Result<Option<Element>> {
+        // Try to find element by matching the path
+        // This is a simplified implementation - in a real parser you'd navigate the AR model properly
+        for (_depth, element) in self.model.elements_dfs() {
+            if let Ok(elem_path) = element.path() {
+                if elem_path == path {
+                    return Ok(Some(element));
+                }
+            }
+        }
+        Ok(None)
     }
 
     fn parse_signal_mappings(&self, pdu_element: &Element) -> Result<Vec<SignalDefinition>> {
@@ -684,9 +802,12 @@ mod tests {
     #[test]
     fn test_parse_real_arxml() {
         // Test with the actual example file if it exists
-        let test_path = Path::new("../../arxml/system-4.2.arxml");
+        let workspace_root = std::env::var("CARGO_MANIFEST_DIR")
+            .map(|p| std::path::PathBuf::from(p).parent().unwrap().to_path_buf())
+            .unwrap_or_else(|_| std::path::PathBuf::from(".."));
+        let test_path = workspace_root.join("arxml/system-4.2.arxml");
         if test_path.exists() {
-            let result = parse_arxml_file(test_path);
+            let result = parse_arxml_file(&test_path);
             match result {
                 Ok((messages, containers)) => {
                     println!("✓ Parsed {} messages and {} containers", messages.len(), containers.len());
@@ -695,6 +816,24 @@ mod tests {
                     for msg in messages.iter().take(3) {
                         println!("  Message: {} (ID: 0x{:X}, {} signals)",
                             msg.name, msg.id, msg.signals.len());
+                    }
+
+                    // Print container details
+                    for container in &containers {
+                        println!("  Container: {} (ID: 0x{:X}, type: {:?})",
+                            container.name, container.id, container.container_type);
+                        match &container.layout {
+                            ContainerLayout::Static { pdus } | ContainerLayout::Dynamic { pdus, .. } => {
+                                println!("    Contains {} PDUs:", pdus.len());
+                                for pdu in pdus {
+                                    println!("      - {} (ID: {}, pos: {}, size: {})",
+                                        pdu.name, pdu.pdu_id, pdu.position, pdu.size);
+                                }
+                            }
+                            ContainerLayout::Queued { pdu_id, pdu_size } => {
+                                println!("    Queued PDU ID: {}, size: {}", pdu_id, pdu_size);
+                            }
+                        }
                     }
                 }
                 Err(e) => {

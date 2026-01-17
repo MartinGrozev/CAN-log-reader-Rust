@@ -77,6 +77,76 @@ impl MessageDecoder {
         })
     }
 
+    /// Decode signals from raw PDU data (for contained PDUs in containers)
+    ///
+    /// # Arguments
+    /// * `pdu_data` - Raw PDU data bytes
+    /// * `message_def` - Message definition from signal database
+    /// * `timestamp` - Timestamp for the decoded signals
+    ///
+    /// # Returns
+    /// * `Some(DecodedEvent::Message)` if decoding succeeded
+    /// * `None` if no signals could be decoded
+    pub fn decode_pdu_data(
+        pdu_data: &[u8],
+        message_def: &MessageDefinition,
+        timestamp: crate::types::Timestamp,
+    ) -> Option<DecodedEvent> {
+        let mut decoded_signals = Vec::new();
+        let mut multiplexer_value: Option<u64> = None;
+
+        // For multiplexed messages, first extract the multiplexer signal value
+        if message_def.is_multiplexed {
+            if let Some(ref mux_signal_name) = message_def.multiplexer_signal {
+                // Find the multiplexer signal
+                if let Some(mux_signal) = message_def.signals.iter().find(|s| s.name == *mux_signal_name) {
+                    // Extract multiplexer value
+                    if let Some(value) = Self::extract_signal_value(pdu_data, mux_signal) {
+                        multiplexer_value = Some(value as u64);
+                    }
+                }
+            }
+        }
+
+        // Decode all signals (non-multiplexed and applicable multiplexed ones)
+        for signal in &message_def.signals {
+            // Check if signal should be decoded based on multiplexer
+            if let Some(ref mux_info) = signal.multiplexer_info {
+                // This signal is multiplexed - check if it should be active
+                if let Some(current_mux_value) = multiplexer_value {
+                    if !mux_info.multiplexer_values.contains(&current_mux_value) {
+                        // Skip this signal - multiplexer value doesn't match
+                        continue;
+                    }
+                } else {
+                    // No multiplexer value extracted - skip multiplexed signals
+                    continue;
+                }
+            }
+
+            // Extract signal value
+            if let Some(decoded) = Self::decode_signal(pdu_data, signal) {
+                decoded_signals.push(decoded);
+            }
+        }
+
+        // Only emit event if we decoded at least one signal
+        if decoded_signals.is_empty() {
+            return None;
+        }
+
+        Some(DecodedEvent::Message {
+            timestamp,
+            channel: 0, // Contained PDUs don't have a specific CAN channel (using 0 as default)
+            can_id: message_def.id,
+            message_name: Some(message_def.name.clone()),
+            sender: message_def.sender.clone(),
+            signals: decoded_signals,
+            is_multiplexed: message_def.is_multiplexed,
+            multiplexer_value,
+        })
+    }
+
     /// Decode a single signal from CAN frame data
     fn decode_signal(data: &[u8], signal: &SignalDefinition) -> Option<DecodedSignal> {
         // Extract raw value from CAN frame data
