@@ -173,8 +173,10 @@ mod tests {
             .unwrap_or_else(|_| std::path::PathBuf::from(".."));
 
         let test_files = vec![
-            workspace_root.join("arxml/test.mf4"),
-            workspace_root.join("test_data/sample.mf4"),
+            workspace_root.join("arxml/test_batch.mf4"),
+            workspace_root.join("arxml/test_batch_cut_0.mf4"),
+            workspace_root.join("arxml/test_batch_cut_1.mf4"),
+            workspace_root.join("arxml/test_metadata.mf4"),
         ];
 
         for test_path in test_files {

@@ -96,6 +96,48 @@ impl Iterator for BlfFrameIterator {
                         is_remote_frame: (msg.flags & 0x04) != 0, // Bit 2: Remote frame
                     }));
                 }
+                ObjectTypes::CanFdMessage100(msg) => {
+                    const CAN_MSG_EXT: u32 = 0x80000000;
+                    const REMOTE_FLAG: u8 = 0x80;
+
+                    let data_len = msg.valid_data_bytes.min(64) as usize;
+                    let data = msg.data[..data_len].to_vec();
+
+                    return Some(Ok(CanFrame {
+                        timestamp_ns: msg.header.timestamp_ns,
+                        channel: msg.channel.saturating_sub(1) as u8,
+                        can_id: msg.id & 0x1FFFFFFF,
+                        data,
+                        is_extended: (msg.id & CAN_MSG_EXT) != 0,
+                        is_fd: (msg.fd_flags & 0x01) != 0,
+                        is_error_frame: false,
+                        is_remote_frame: (msg.flags & REMOTE_FLAG) != 0,
+                    }));
+                }
+                ObjectTypes::CanFdMessage64(msg) => {
+                    const CAN_MSG_EXT: u32 = 0x80000000;
+                    const REMOTE_FLAG: u32 = 0x0010;
+                    const FD_FLAG: u32 = 0x1000;
+
+                    let mut data = msg.data.clone();
+                    let valid_len = msg.valid_data_bytes as usize;
+                    if valid_len > data.len() {
+                        data.resize(valid_len, 0);
+                    } else {
+                        data.truncate(valid_len);
+                    }
+
+                    return Some(Ok(CanFrame {
+                        timestamp_ns: msg.header.timestamp_ns,
+                        channel: msg.channel.saturating_sub(1),
+                        can_id: msg.id & 0x1FFFFFFF,
+                        data,
+                        is_extended: (msg.id & CAN_MSG_EXT) != 0,
+                        is_fd: (msg.fd_flags & FD_FLAG) != 0,
+                        is_error_frame: false,
+                        is_remote_frame: (msg.fd_flags & REMOTE_FLAG) != 0,
+                    }));
+                }
                 ObjectTypes::CanErrorExt73(err) => {
                     // Extract CAN error frame (type 73)
                     return Some(Ok(CanFrame {
@@ -199,6 +241,7 @@ mod tests {
                         println!("  Error frames: {}", error_count);
 
                         assert!(can_count > 0 || error_count > 0, "No frames extracted");
+                        assert!(fd_count > 0, "No CAN-FD frames extracted");
                     }
                     Err(e) => {
                         println!("✗ Error: {}", e);

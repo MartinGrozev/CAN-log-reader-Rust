@@ -44,7 +44,9 @@
       "Bash(cargo tree:*)",
       "Bash(findstr:*)",
       "Bash(cargo metadata:*)",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(./analyze_blf.exe:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

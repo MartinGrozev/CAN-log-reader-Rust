@@ -1,7 +1,7 @@
 ================================================================================
 CAN LOG READER/PARSER - DETAILED SPECIFICATION
 ================================================================================
-Last Updated: 2026-01-10
+Last Updated: 2026-01-20
 
 1) OVERVIEW
 ================================================================================
@@ -990,21 +990,21 @@ Build Dependencies:
 
 Runtime Dependencies (statically linked):
 - mdflib - C++ MDF4 parser library
-- ZLIB (1.3.1) - Compression support (via vcpkg)
-- EXPAT (2.7.3) - XML parsing support (via vcpkg)
+- ZLIB (1.3.1) - Compression support (via vcpkg, static)
+- EXPAT (2.7.3) - XML parsing support (via vcpkg, static)
 
 System Libraries (Windows):
 - ws2_32, advapi32, userenv - Windows system libraries
-- MSVC C++ runtime (static linkage for portability)
+- MSVC C++ runtime (dynamic /MD to match Rust)
 
 10.4) BUILD PROCESS
 -------------------
 Automated via build.rs:
 1. Detect vcpkg installation (C:\Users\<user>\vcpkg by default)
-2. Configure CMake with vcpkg toolchain for dependencies
-3. Compile mdflib as static library (Release mode, /MT runtime)
+2. Configure CMake with vcpkg toolchain and static-md triplet
+3. Compile mdflib as static library (Release mode, /MD runtime)
 4. Compile C API wrapper (mdf_c_api.cpp) with C++17
-5. Link everything into final Rust binary
+5. Link mdflib plus static zlib/expat into final Rust binary
 
 Result: Single executable with embedded mdflib (no external DLLs required)
 
@@ -1015,7 +1015,7 @@ Installation commands (Windows):
   git clone https://github.com/Microsoft/vcpkg.git
   cd vcpkg
   .\bootstrap-vcpkg.bat
-  .\vcpkg install zlib:x64-windows-static expat:x64-windows-static
+  .\vcpkg install zlib:x64-windows-static-md expat:x64-windows-static-md
 
 The build system automatically detects vcpkg and uses installed dependencies.
 
@@ -1024,13 +1024,12 @@ The build system automatically detects vcpkg and uses installed dependencies.
 ✓ Complete: FFI architecture, C API wrapper, Rust bindings
 ✓ Complete: Build system with CMake and vcpkg integration
 ✓ Complete: File opening, MDF4 validation, CAN data detection
-✓ Complete: Release builds compile successfully
+✓ Complete: Release and debug builds compile successfully (static zlib/expat)
+✓ Complete: BLF decoding supports CAN FD object types 100 and 101
 
 Pending: Complete CAN frame extraction from mdflib channel observers
         (C API iterator currently returns stub data)
-
-Test Status: Release builds work; test builds have runtime library
-            mismatch (/MT vs /MD) - known issue, non-blocking
+Test Status: BLF unit tests pass with CAN FD test files
 
 10.7) USAGE
 -----------

@@ -8,13 +8,10 @@ use std::path::Path;
 
 pub mod blf;
 pub mod mf4;
-mod blf_extended;  // Extended BLF type support (100, 101)
-pub mod blf_hybrid;    // Hybrid BLF parser with type 100/101 support
 mod mf4_ffi;  // FFI bindings for mdflib (private module)
 
 // Re-export parser types
 pub use blf::{BlfParser, BlfFrameIterator};
-pub use blf_hybrid::{HybridBlfParser, HybridBlfIterator};
 pub use mf4::{Mf4Parser, Mf4FrameIterator};
 
 /// Common trait for all log file parsers

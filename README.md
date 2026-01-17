@@ -2,7 +2,7 @@
 
 A high-performance CAN log reader/decoder written in Rust. Decodes offline BLF/MF4 files using signal definitions from DBC and ARXML files, reconstructs CAN-TP messages, and generates detailed analysis reports.
 
-**Status:** 🚧 Active Development - Phases 1-4 Complete
+**Status:** 🚧 Active Development - BLF decoding working, MF4 FFI integration in progress
 
 ## Features
 
@@ -14,7 +14,8 @@ A high-performance CAN log reader/decoder written in Rust. Decodes offline BLF/M
   - Physical value conversion (factor, offset, units)
   - Optimized PDU-to-CAN-ID lookup (O(1) HashMap)
   - SYSTEM-SIGNAL-REF parsing for engineering values
-- **Phase 3:** Log file format parsers (BLF/MF4 stubs ready)
+- **Phase 3:** Log file format parsers (BLF working, MF4 stub)
+- **BLF decoding:** Supports CAN and CAN-FD including object types 100/101
 - **Phase 4:** Message decoding engine
   - Bit extraction (little-endian & big-endian)
   - Physical value conversion
@@ -31,7 +32,7 @@ A high-performance CAN log reader/decoder written in Rust. Decodes offline BLF/M
 
 ### Prerequisites
 - Windows (tested on Win10/Win11)
-- No Rust installation needed - use pre-built binary!
+- No Rust installation needed if you use the pre-built binary
 
 ### Installation
 
@@ -59,7 +60,7 @@ can-log-cli.exe --dbc signals.dbc
 can-log-cli.exe --arxml system.arxml
 ```
 
-#### Decode a log file (when BLF parser is integrated):
+#### Decode a log file:
 ```bash
 can-log-cli.exe --log trace.blf --dbc powertrain.dbc
 can-log-cli.exe --log trace.blf --arxml system.arxml --output decoded.txt
@@ -149,8 +150,9 @@ CAN-log-reader-Rust/
   - MULTIPLEXED-I-PDU ✅
   - CONTAINER-I-PDU ✅
   - SYSTEM-SIGNAL-REF with COMPU-METHOD ✅
-- **BLF:** Vector Binary Log Format (stub, integration pending)
-- **MF4:** ASAM MDF4 files (stub with mdflib FFI)
+- **BLF:** Vector Binary Log Format (CAN/CAN-FD)
+  - CAN-FD object types 100 and 101 (python-can compatible) ✅
+- **MF4:** ASAM MDF4 files (mdflib FFI; CAN iterator stub)
 
 #### Output Formats
 - Console/Text (current)
@@ -196,8 +198,7 @@ Example: `BatterySOC = 0.0 + 0.5 * 150 = 75.0%`
 4. ✅ **Phase 4:** Message decoder (Session 6)
 
 ### Current Limitations ⚠️
-- BLF parser uses stub (needs ablf crate integration)
-- MF4 parser uses stub (mdflib C++ FFI ready but not integrated)
+- MF4 parser uses stub (mdflib C++ FFI ready but CAN iterator not implemented)
 - No CAN-TP reconstruction yet (Phase 5)
 - No event tracking yet (Phase 10)
 - No report generation yet (Phase 12)
@@ -208,7 +209,7 @@ Example: `BatterySOC = 0.0 + 0.5 * 150 = 75.0%`
 - ✅ View signal database statistics
 - ✅ Test signal definitions are correct
 
-**Next step:** Integrate BLF parser → decode real CAN frames!
+**Next step:** Finish MF4 CAN frame extraction and CAN-TP reconstruction.
 
 ## Testing with Real Data
 
@@ -252,7 +253,7 @@ Example: `BatterySOC = 0.0 + 0.5 * 150 = 75.0%`
 **Build:**
 - `cmake` - For mdflib (MF4 support)
 - `cc` - C++ compiler integration
-- `vcpkg` - ZLIB/EXPAT for mdflib
+- `vcpkg` - ZLIB/EXPAT (static-md) for mdflib
 
 **CLI:**
 - `clap` - Command-line argument parsing
@@ -281,13 +282,13 @@ This is a personal project for automotive CAN analysis. Contributions welcome!
 **Build steps:**
 ```bash
 # Install vcpkg dependencies
-vcpkg install zlib:x64-windows-static expat:x64-windows-static
+vcpkg install zlib:x64-windows-static-md expat:x64-windows-static-md
 
 # Build release
 cargo build --release
 
-# Run tests (note: some tests fail due to known runtime issues)
-cargo test --lib
+# Run BLF tests
+cargo test -p can-log-decoder test_parse_real_blf -- --nocapture
 ```
 
 ## License

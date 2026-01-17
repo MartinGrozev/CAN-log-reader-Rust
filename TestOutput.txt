@@ -1,0 +1,459 @@
+PS C:\Users\HP> cd "C:\Users\HP\Rust\CAN log reader - Codex"
+PS C:\Users\HP\Rust\CAN log reader - Codex> cargo test -p can-log-decoder test_parse_real_blf -- --nocapture
+   Compiling can-log-decoder v0.1.0 (C:\Users\HP\Rust\CAN log reader - Codex\can-log-decoder)
+warning: unused variable: `out_dir`
+   --> can-log-decoder\build.rs:148:9
+    |
+148 |     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_out_dir`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `can-log-decoder` (build script) generated 1 warning
+warning: can-log-decoder@0.1.0: Building mdflib from: C:\Users\HP\Rust\CAN log reader - Codex\vendor\mdflib
+warning: can-log-decoder@0.1.0: Forcing mdflib Release build on MSVC to avoid CRT mismatch
+warning: can-log-decoder@0.1.0: Using vcpkg toolchain: C:\Users\HP\vcpkg\scripts\buildsystems\vcpkg.cmake
+warning: can-log-decoder@0.1.0: mdflib built successfully at: C:\Users\HP\Rust\CAN log reader - Codex\target\debug\build\can-log-decoder-9a0787e4458eeb48\out
+warning: can-log-decoder@0.1.0: C API wrapper built successfully
+warning: can-log-decoder@0.1.0: mdflib linking configured successfully
+warning: unused import: `CString`
+ --> can-log-decoder\src\formats\mf4_ffi.rs:6:22
+  |
+6 | use std::ffi::{CStr, CString};
+  |                      ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::collections::HashMap`
+ --> can-log-decoder\src\signals\dbc.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ByteOrder`, `ContainedPduInfo`, `ContainerDefinition`, `ContainerLayout`, `MessageDefinition`, `MultiplexerInfo`, `SignalDefinition`, and `ValueType`
+  --> can-log-decoder\src\signals\mod.rs:12:5
+   |
+12 |     ByteOrder, ContainerDefinition, ContainerLayout, ContainedPduInfo,
+   |     ^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^
+13 |     MessageDefinition, MultiplexerInfo, SignalDatabase, SignalDefinition,
+   |     ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^                  ^^^^^^^^^^^^^^^^
+14 |     ValueType, DatabaseStats,
+   |     ^^^^^^^^^
+
+warning: unused import: `Timestamp`
+ --> can-log-decoder\src\message_decoder.rs:8:72
+  |
+8 | use crate::types::{CanFrame, DecodedEvent, DecodedSignal, SignalValue, Timestamp};
+  |                                                                        ^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> can-log-decoder\src\message_decoder.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `config`
+   --> can-log-decoder\src\decoder.rs:124:9
+    |
+124 |         config: DecoderConfig,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `length`
+   --> can-log-decoder\src\signals\arxml.rs:329:13
+    |
+329 |         let length = self
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_length`
+
+warning: struct `ObjectHeader` is never constructed
+  --> can-log-decoder\src\formats\blf_extended.rs:13:12
+   |
+13 | pub struct ObjectHeader {
+   |            ^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated function `parse` is never used
+  --> can-log-decoder\src\formats\blf_extended.rs:23:12
+   |
+21 | impl ObjectHeader {
+   | ----------------- associated function in this implementation
+22 |     /// Parse object header from reader
+23 |     pub fn parse<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+   |            ^^^^^
+
+warning: struct `CanFdMessage` is never constructed
+  --> can-log-decoder\src\formats\blf_extended.rs:57:12
+   |
+57 | pub struct CanFdMessage {
+   |            ^^^^^^^^^^^^
+
+warning: associated items `parse` and `to_can_frame` are never used
+   --> can-log-decoder\src\formats\blf_extended.rs:74:12
+    |
+ 71 | impl CanFdMessage {
+    | ----------------- associated items in this implementation
+...
+ 74 |     pub fn parse<R: Read>(reader: &mut R, timestamp_ns: u64) -> std::io::Result<Self> {
+    |            ^^^^^
+...
+107 |     pub fn to_can_frame(&self) -> CanFrame {
+    |            ^^^^^^^^^^^^
+
+warning: type alias `CanFdMessage64` is never used
+   --> can-log-decoder\src\formats\blf_extended.rs:133:10
+    |
+133 | pub type CanFdMessage64 = CanFdMessage;
+    |          ^^^^^^^^^^^^^^
+
+warning: function `try_parse_canfd_message` is never used
+   --> can-log-decoder\src\formats\blf_extended.rs:136:8
+    |
+136 | pub fn try_parse_canfd_message<R: Read + Seek>(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `OpenFailed`, `NotMdfFile`, `ReadFailed`, `NoCanData`, `NullHandle`, and `EndOfData` are never constructed
+  --> can-log-decoder\src\formats\mf4_ffi.rs:26:5
+   |
+24 | pub enum MdfError {
+   |          -------- variants in this enum
+25 |     Ok = 0,
+26 |     OpenFailed = 1,
+   |     ^^^^^^^^^^
+27 |     NotMdfFile = 2,
+   |     ^^^^^^^^^^
+28 |     ReadFailed = 3,
+   |     ^^^^^^^^^^
+29 |     NoCanData = 4,
+   |     ^^^^^^^^^
+30 |     NullHandle = 5,
+   |     ^^^^^^^^^^
+31 |     EndOfData = 6,
+   |     ^^^^^^^^^
+   |
+   = note: `MdfError` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `name`, `size`, `sender`, `is_multiplexed`, `multiplexer_signal`, and `source` are never read
+  --> can-log-decoder\src\signals\database.rs:14:9
+   |
+10 | pub struct MessageDefinition {
+   |            ----------------- fields in this struct
+...
+14 |     pub name: String,
+   |         ^^^^
+15 |     /// Message size in bytes
+16 |     pub size: usize,
+   |         ^^^^
+17 |     /// Sender ECU name (optional)
+18 |     pub sender: Option<String>,
+   |         ^^^^^^
+...
+22 |     pub is_multiplexed: bool,
+   |         ^^^^^^^^^^^^^^
+23 |     /// Multiplexer signal name (if multiplexed)
+24 |     pub multiplexer_signal: Option<String>,
+   |         ^^^^^^^^^^^^^^^^^^
+25 |     /// Source file (DBC/ARXML filename)
+26 |     pub source: String,
+   |         ^^^^^^
+   |
+   = note: `MessageDefinition` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: multiple fields are never read
+  --> can-log-decoder\src\signals\database.rs:35:9
+   |
+31 | pub struct SignalDefinition {
+   |            ---------------- fields in this struct
+...
+35 |     pub start_bit: u16,
+   |         ^^^^^^^^^
+36 |     /// Length in bits
+37 |     pub length: u16,
+   |         ^^^^^^
+38 |     /// Byte order (true = big-endian, false = little-endian)
+39 |     pub byte_order: ByteOrder,
+   |         ^^^^^^^^^^
+40 |     /// Value type (signed/unsigned)
+41 |     pub value_type: ValueType,
+   |         ^^^^^^^^^^
+42 |     /// Scale factor to convert raw value to physical value
+43 |     pub factor: f64,
+   |         ^^^^^^
+44 |     /// Offset to add after scaling
+45 |     pub offset: f64,
+   |         ^^^^^^
+46 |     /// Minimum physical value
+47 |     pub min: f64,
+   |         ^^^
+48 |     /// Maximum physical value
+49 |     pub max: f64,
+   |         ^^^
+50 |     /// Engineering unit (e.g., "km/h", "°C", "V")
+51 |     pub unit: Option<String>,
+   |         ^^^^
+52 |     /// Value table for enum-like values (raw_value -> description)
+53 |     pub value_table: Option<HashMap<i64, String>>,
+   |         ^^^^^^^^^^^
+   |
+   = note: `SignalDefinition` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `multiplexer_signal` and `multiplexer_values` are never read
+  --> can-log-decoder\src\signals\database.rs:80:9
+   |
+78 | pub struct MultiplexerInfo {
+   |            --------------- fields in this struct
+79 |     /// Name of the multiplexer signal that controls this signal
+80 |     pub multiplexer_signal: String,
+   |         ^^^^^^^^^^^^^^^^^^
+81 |     /// Multiplexer value(s) for which this signal is active
+82 |     pub multiplexer_values: Vec<u64>,
+   |         ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `MultiplexerInfo` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `name`, `container_type`, `layout`, and `source` are never read
+  --> can-log-decoder\src\signals\database.rs:91:9
+   |
+87 | pub struct ContainerDefinition {
+   |            ------------------- fields in this struct
+...
+91 |     pub name: String,
+   |         ^^^^
+92 |     /// Container type (Static/Dynamic/Queued)
+93 |     pub container_type: crate::types::ContainerType,
+   |         ^^^^^^^^^^^^^^
+94 |     /// Layout information (PDU positions, headers, etc.)
+95 |     pub layout: ContainerLayout,
+   |         ^^^^^^
+96 |     /// Source ARXML file
+97 |     pub source: String,
+   |         ^^^^^^
+   |
+   = note: `ContainerDefinition` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `header_size` and `pdus` are never read
+   --> can-log-decoder\src\signals\database.rs:109:9
+    |
+108 |     Dynamic {
+    |     ------- fields in this variant
+109 |         header_size: usize,
+    |         ^^^^^^^^^^^
+110 |         pdus: Vec<ContainedPduInfo>,
+    |         ^^^^
+    |
+    = note: `ContainerLayout` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: variants `Static` and `Queued` are never constructed
+   --> can-log-decoder\src\signals\database.rs:104:5
+    |
+102 | pub enum ContainerLayout {
+    |          --------------- variants in this enum
+103 |     /// Fixed layout - PDUs always at same positions
+104 |     Static {
+    |     ^^^^^^
+...
+113 |     Queued {
+    |     ^^^^^^
+    |
+    = note: `ContainerLayout` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `pdu_id`, `name`, `position`, and `size` are never read
+   --> can-log-decoder\src\signals\database.rs:123:9
+    |
+121 | pub struct ContainedPduInfo {
+    |            ---------------- fields in this struct
+122 |     /// PDU identifier
+123 |     pub pdu_id: u32,
+    |         ^^^^^^
+124 |     /// PDU name
+125 |     pub name: String,
+    |         ^^^^
+126 |     /// Position in container (byte offset)
+127 |     pub position: usize,
+    |         ^^^^^^^^
+128 |     /// PDU size in bytes
+129 |     pub size: usize,
+    |         ^^^^
+    |
+    = note: `ContainedPduInfo` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: methods `get_messages`, `get_message`, `get_container`, `find_signal`, and `get_all_can_ids` are never used
+   --> can-log-decoder\src\signals\database.rs:181:12
+    |
+146 | impl SignalDatabase {
+    | ------------------- methods in this implementation
+...
+181 |     pub fn get_messages(&self, can_id: u32) -> Option<&Vec<MessageDefinition>> {
+    |            ^^^^^^^^^^^^
+...
+186 |     pub fn get_message(&self, can_id: u32) -> Option<&MessageDefinition> {
+    |            ^^^^^^^^^^^
+...
+191 |     pub fn get_container(&self, container_id: u32) -> Option<&ContainerDefinition> {
+    |            ^^^^^^^^^^^^^
+...
+196 |     pub fn find_signal(&self, signal_name: &str) -> Vec<(u32, &SignalDefinition)> {
+    |            ^^^^^^^^^^^
+...
+229 |     pub fn get_all_can_ids(&self) -> Vec<u32> {
+    |            ^^^^^^^^^^^^^^^
+
+warning: struct `MessageDecoder` is never constructed
+  --> can-log-decoder\src\message_decoder.rs:12:12
+   |
+12 | pub struct MessageDecoder;
+   |            ^^^^^^^^^^^^^^
+
+warning: associated functions `decode_message`, `decode_signal`, `extract_signal_value`, `extract_little_endian`, `extract_big_endian`, and `sign_extend` are never used
+   --> can-log-decoder\src\message_decoder.rs:24:12
+    |
+ 14 | impl MessageDecoder {
+    | ------------------- associated functions in this implementation
+...
+ 24 |     pub fn decode_message(frame: &CanFrame, message_def: &MessageDefinition) -> Option<DecodedEvent> {
+    |            ^^^^^^^^^^^^^^
+...
+ 81 |     fn decode_signal(data: &[u8], signal: &SignalDefinition) -> Option<DecodedSignal> {
+    |        ^^^^^^^^^^^^^
+...
+120 |     fn extract_signal_value(data: &[u8], signal: &SignalDefinition) -> Option<i64> {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+157 |     fn extract_little_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+180 |     fn extract_big_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
+    |        ^^^^^^^^^^^^^^^^^^
+...
+202 |     fn sign_extend(value: u64, bit_length: usize) -> i64 {
+    |        ^^^^^^^^^^^
+
+warning: field `source` is never read
+  --> can-log-decoder\src\signals\database.rs:26:9
+   |
+10 | pub struct MessageDefinition {
+   |            ----------------- field in this struct
+...
+26 |     pub source: String,
+   |         ^^^^^^
+   |
+   = note: `MessageDefinition` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `byte_order`, `value_type`, `min`, `max`, and `value_table` are never read
+  --> can-log-decoder\src\signals\database.rs:39:9
+   |
+31 | pub struct SignalDefinition {
+   |            ---------------- fields in this struct
+...
+39 |     pub byte_order: ByteOrder,
+   |         ^^^^^^^^^^
+40 |     /// Value type (signed/unsigned)
+41 |     pub value_type: ValueType,
+   |         ^^^^^^^^^^
+...
+47 |     pub min: f64,
+   |         ^^^
+48 |     /// Maximum physical value
+49 |     pub max: f64,
+   |         ^^^
+...
+53 |     pub value_table: Option<HashMap<i64, String>>,
+   |         ^^^^^^^^^^^
+   |
+   = note: `SignalDefinition` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `multiplexer_values` is never read
+  --> can-log-decoder\src\signals\database.rs:82:9
+   |
+78 | pub struct MultiplexerInfo {
+   |            --------------- field in this struct
+...
+82 |     pub multiplexer_values: Vec<u64>,
+   |         ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `MultiplexerInfo` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: methods `get_messages`, `get_container`, and `get_all_can_ids` are never used
+   --> can-log-decoder\src\signals\database.rs:181:12
+    |
+146 | impl SignalDatabase {
+    | ------------------- methods in this implementation
+...
+181 |     pub fn get_messages(&self, can_id: u32) -> Option<&Vec<MessageDefinition>> {
+    |            ^^^^^^^^^^^^
+...
+191 |     pub fn get_container(&self, container_id: u32) -> Option<&ContainerDefinition> {
+    |            ^^^^^^^^^^^^^
+...
+229 |     pub fn get_all_can_ids(&self) -> Vec<u32> {
+    |            ^^^^^^^^^^^^^^^
+
+warning: associated functions `decode_message`, `decode_signal`, and `extract_signal_value` are never used
+   --> can-log-decoder\src\message_decoder.rs:24:12
+    |
+ 14 | impl MessageDecoder {
+    | ------------------- associated functions in this implementation
+...
+ 24 |     pub fn decode_message(frame: &CanFrame, message_def: &MessageDefinition) -> Option<DecodedEvent> {
+    |            ^^^^^^^^^^^^^^
+...
+ 81 |     fn decode_signal(data: &[u8], signal: &SignalDefinition) -> Option<DecodedSignal> {
+    |        ^^^^^^^^^^^^^
+...
+120 |     fn extract_signal_value(data: &[u8], signal: &SignalDefinition) -> Option<i64> {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: `can-log-decoder` (lib test) generated 23 warnings (18 duplicates)
+warning: `can-log-decoder` (lib) generated 24 warnings (run `cargo fix --lib -p can-log-decoder` to apply 5 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.90s
+     Running unittests src\lib.rs (target\debug\deps\can_log_decoder-361caff544f0e664.exe)
+
+running 1 test
+
+=== Testing: "C:\\Users\\HP\\Rust\\CAN log reader - Codex\\arxml/test_CanFdMessage.blf" ===
+✓ BLF file opened and validated
+LogContainerIter: BadMagic, skipping 1 byte at pos=116
+LogContainerIter: BadMagic, skipping 1 byte at pos=117
+LogContainerIter: BadMagic, skipping 1 byte at pos=118
+LogContainerIter: BadMagic, skipping 1 byte at pos=119
+LogContainerIter: BadMagic, skipping 1 byte at pos=236
+LogContainerIter: BadMagic, skipping 1 byte at pos=0
+LogContainerIter: BadMagic, skipping 1 byte at pos=1
+LogContainerIter: BadMagic, skipping 1 byte at pos=2
+  CAN frames: 2
+  CAN-FD frames: 2
+  Error frames: 0
+
+=== Testing: "C:\\Users\\HP\\Rust\\CAN log reader - Codex\\arxml/test_CanFdMessage64.blf" ===
+✓ BLF file opened and validated
+LogContainerIter: BadMagic, skipping 1 byte at pos=136
+LogContainerIter: BadMagic, skipping 1 byte at pos=137
+LogContainerIter: BadMagic, skipping 1 byte at pos=138
+LogContainerIter: BadMagic, skipping 1 byte at pos=139
+LogContainerIter: BadMagic, skipping 1 byte at pos=140
+LogContainerIter: BadMagic, skipping 1 byte at pos=141
+LogContainerIter: BadMagic, skipping 1 byte at pos=142
+LogContainerIter: BadMagic, skipping 1 byte at pos=143
+LogContainerIter: BadMagic, skipping 1 byte at pos=280
+LogContainerIter: BadMagic, skipping 1 byte at pos=281
+LogContainerIter: BadMagic, skipping 1 byte at pos=282
+LogContainerIter: BadMagic, skipping 1 byte at pos=283
+LogContainerIter: BadMagic, skipping 1 byte at pos=284
+LogContainerIter: BadMagic, skipping 1 byte at pos=0
+LogContainerIter: BadMagic, skipping 1 byte at pos=1
+LogContainerIter: BadMagic, skipping 1 byte at pos=2
+  CAN frames: 2
+  CAN-FD frames: 2
+  Error frames: 0
+test formats::blf::tests::test_parse_real_blf ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.01s
+
+     Running tests\explore_ablf.rs (target\debug\deps\explore_ablf-fea8ba390fe6a870.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+PS C:\Users\HP\Rust\CAN log reader - Codex>
