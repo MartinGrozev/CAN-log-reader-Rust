@@ -40,7 +40,11 @@
       "Bash(git commit:*)",
       "Bash(can-log-cli.exe:*)",
       "Bash(./can-log-cli.exe:*)",
-      "Bash(set RUST_LOG=debug:*)"
+      "Bash(set RUST_LOG=debug:*)",
+      "Bash(cargo tree:*)",
+      "Bash(findstr:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(cargo run:*)"
     ],
     "deny": [],
     "ask": []

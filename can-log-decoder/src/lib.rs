@@ -64,7 +64,7 @@ pub use types::{
 };
 
 // Internal modules (not exposed in public API)
-mod formats;
+pub mod formats;  // Made public for examples/testing
 mod signals;
 mod message_decoder;
 mod cantp;
