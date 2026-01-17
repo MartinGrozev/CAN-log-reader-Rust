@@ -1,0 +1,138 @@
+===============================================================================
+   USAGE EXAMPLES - BLF File Analyzer
+===============================================================================
+
+BASIC USAGE:
+------------
+analyze_blf.exe "path\to\your\file.blf"
+
+EXAMPLE 1: Analyze a file in the same folder
+---------------------------------------------
+analyze_blf.exe "mylog.blf"
+
+EXAMPLE 2: Analyze a file in another folder
+--------------------------------------------
+analyze_blf.exe "C:\Users\YourName\Documents\CANoe\logs\recording_001.blf"
+
+EXAMPLE 3: Analyze a file with spaces in path
+----------------------------------------------
+analyze_blf.exe "C:\My Logs\CAN Data\test recording 2024-01-15.blf"
+
+(Note: Always use quotes around paths with spaces!)
+
+EXAMPLE 4: From PowerShell
+---------------------------
+.\analyze_blf.exe "C:\logs\myfile.blf"
+
+EXAMPLE 5: Save output to a text file
+--------------------------------------
+analyze_blf.exe "myfile.blf" > analysis_results.txt
+
+This saves the complete analysis to analysis_results.txt
+
+EXAMPLE 6: Analyze multiple files (batch)
+------------------------------------------
+Create a batch file (analyze_all.bat):
+
+@echo off
+echo Analyzing BLF files...
+analyze_blf.exe "file1.blf" > file1_analysis.txt
+analyze_blf.exe "file2.blf" > file2_analysis.txt
+analyze_blf.exe "file3.blf" > file3_analysis.txt
+echo Done! Check *_analysis.txt files for results
+
+===============================================================================
+WHAT TO LOOK FOR IN THE OUTPUT:
+===============================================================================
+
+1. FILE SIZE
+   Shows if the file loaded successfully
+
+2. OBJECT TYPE STATISTICS
+   Most important part! Look for:
+   - Type 86 → ✅ Your files are READY!
+   - Type 100/101 → ⚠️  Need conversion or additional work
+
+3. RECOMMENDATIONS
+   Tells you exactly what to do next
+
+===============================================================================
+SAMPLE OUTPUT INTERPRETATION:
+===============================================================================
+
+SCENARIO A - GOOD NEWS (Type 86 files):
+---------------------------------------
+Type            Count        Total Size      Description
+─────────────────────────────────────────────────────────────
+86              12,456       14.2 MB         CanMessage2 (✅ SUPPORTED)
+
+✅ READY TO USE
+   Use: BlfParser (standard parser)
+   This file is fully supported with type 86 messages.
+
+→ ACTION: Report back "My files use Type 86, ready to proceed!"
+
+SCENARIO B - NEEDS DECISION (Type 100/101 files):
+--------------------------------------------------
+Type            Count        Total Size      Description
+─────────────────────────────────────────────────────────────
+100             8,234        11.5 MB         CAN_FD_MESSAGE (⚠️  NEEDS WORK)
+
+⚠️  PARTIAL SUPPORT
+   Options:
+   1. Export logs with type 86 format (CANoe settings)
+   2. Wait for type 100/101 parser implementation
+
+→ ACTION: Choose option 1 (re-export) or option 2 (wait for implementation)
+
+SCENARIO C - MIXED FILES:
+-------------------------
+Type            Count        Total Size      Description
+─────────────────────────────────────────────────────────────
+86              5,123        7.2 MB          CanMessage2 (✅ SUPPORTED)
+100             3,456        4.8 MB          CAN_FD_MESSAGE (⚠️  NEEDS WORK)
+
+→ ACTION: Some messages work, some don't. Discuss priority.
+
+===============================================================================
+TROUBLESHOOTING:
+===============================================================================
+
+ERROR: "File not found"
+-----------------------
+- Check the path is correct
+- Use quotes around the path
+- Use full path (e.g., C:\Users\...)
+- Check file extension is .blf
+
+ERROR: "Invalid BLF file signature"
+-----------------------------------
+- File may be corrupted
+- File might not be a BLF file
+- Try opening in CANoe to verify
+
+TOOL DOESN'T START:
+-------------------
+- Open Command Prompt as Administrator
+- Check Windows version (needs x64)
+- Try copying to a simpler path (e.g., C:\temp\)
+
+===============================================================================
+NEXT STEPS AFTER ANALYSIS:
+===============================================================================
+
+1. Run the analyzer on ALL your production BLF files
+2. Save each output
+3. Report back with:
+   - How many files you tested
+   - What types were found (86, 100, 101, or mix)
+   - File sizes (small test files vs. large production logs)
+
+4. Based on results, we'll determine:
+   - If parser is ready for your files
+   - If re-export is needed
+   - If type 100/101 implementation is required
+
+===============================================================================
+For more information see README.txt
+===============================================================================
