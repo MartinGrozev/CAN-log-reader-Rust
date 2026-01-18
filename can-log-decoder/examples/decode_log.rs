@@ -14,6 +14,15 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
+// Simple logger initialization
+fn init_logger() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .format_timestamp(None)
+        .format_module_path(false)
+        .init();
+}
+
 fn timestamp_to_secs(ts: &Timestamp) -> f64 {
     ts.timestamp() as f64 + (ts.timestamp_subsec_nanos() as f64 / 1_000_000_000.0)
 }
@@ -168,6 +177,9 @@ fn print_decoded_event(event: &DecodedEvent, verbose: bool) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging to see warnings about skipped message types
+    init_logger();
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {

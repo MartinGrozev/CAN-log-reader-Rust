@@ -161,15 +161,42 @@ impl Iterator for BlfFrameIterator {
                     continue;
                 }
                 ObjectTypes::UnsupportedPadded { .. } => {
-                    // Skip recognized but unsupported types (6, 7, 8, 9, 72, 90, 92, 96)
+                    // Skip recognized but unsupported types (LIN, FlexRay, Ethernet, GPS, etc.)
+                    let obj_type = obj.object_type;
+                    if !self.skipped_types.contains(&obj_type) {
+                        // Log first occurrence of each type
+                        let type_name = match obj_type {
+                            // LIN types
+                            20..=29 => "LIN",
+                            // FlexRay types
+                            30..=39 => "FlexRay",
+                            // MOST types
+                            40..=50 => "MOST",
+                            // Ethernet types
+                            71 | 113..=120 => "Ethernet",
+                            // GPS/IMU types
+                            80..=85 => "GPS/IMU",
+                            // Diagnostic types
+                            51..=70 => "Diagnostic",
+                            // Others
+                            _ => "Other",
+                        };
+                        log::info!(
+                            "Skipping {} object type {} (size {} bytes) - not CAN/CAN-FD",
+                            type_name,
+                            obj_type,
+                            obj.object_size
+                        );
+                        self.skipped_types.insert(obj_type);
+                    }
                     continue;
                 }
                 ObjectTypes::Unsupported(_) => {
-                    // Warn about unsupported types (like type 100 CAN-FD, type 115, etc.)
+                    // Warn about truly unknown types
                     let obj_type = obj.object_type;
                     if !self.skipped_types.contains(&obj_type) {
                         log::warn!(
-                            "Skipping unsupported BLF object type {} (size {} bytes)",
+                            "Skipping unknown BLF object type {} (size {} bytes)",
                             obj_type,
                             obj.object_size
                         );

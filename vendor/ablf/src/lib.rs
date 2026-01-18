@@ -39,6 +39,7 @@ impl<R: BufRead + Seek> IntoIterator for BlfFile<R> {
             prev_cont_data: Vec::new(),
             skipped: 0,
             cur_cont_iter: None,
+            consecutive_bad_magic: 0,
         }
     }
 }
@@ -56,6 +57,7 @@ pub struct ObjectIterator<R: BufRead> {
     cur_cont_iter: Option<LogContainerIter>,
     // infos collected:
     skipped: u64,
+    consecutive_bad_magic: u32, // Track consecutive BadMagic errors
 }
 
 impl<R: BufRead> ObjectIterator<R> {
@@ -83,6 +85,9 @@ impl<R: BufRead + Seek> Iterator for ObjectIterator<R> {
 
         match Object::read(&mut self.blf.reader) {
             Ok(obj) => {
+                // Reset consecutive error counter on success
+                self.consecutive_bad_magic = 0;
+
                 //println!("{:?}", obj);
                 if let ObjectTypes::LogContainer10(cont) = obj.data {
                     self.cur_cont_iter = Some(cont.into_iter(&self.prev_cont_data));
@@ -105,7 +110,19 @@ impl<R: BufRead + Seek> Iterator for ObjectIterator<R> {
                 } else {
                     match e {
                         binrw::Error::BadMagic { pos, .. } => {
-                            println!("ObjectIterator: BadMagic, skipping 1 byte at pos={}", pos);
+                            self.consecutive_bad_magic += 1;
+
+                            // Prevent infinite loop: stop after 1000 consecutive BadMagic errors
+                            if self.consecutive_bad_magic > 1000 {
+                                eprintln!("ObjectIterator: Too many consecutive BadMagic errors (>1000), stopping iteration at pos={}", pos);
+                                return None;
+                            }
+
+                            if self.consecutive_bad_magic % 100 == 1 {
+                                // Only print every 100th error to avoid log spam
+                                eprintln!("ObjectIterator: BadMagic (#{}) at pos={}, skipping 1 byte", self.consecutive_bad_magic, pos);
+                            }
+
                             self.skipped += 1;
                             self.blf.reader.seek(std::io::SeekFrom::Current(1)).unwrap();
                             self.next() // todo remove recursion!
@@ -193,7 +210,28 @@ pub enum ObjectTypes {
     LogContainer10(#[br(args{object_size:remaining_size})] LogContainer),
     #[br(pre_assert(object_type == 65))]
     AppText65(#[br(args{remaining_size})] AppText),
-    #[br(pre_assert([72, 6, 7, 8, 9, 90, 96, 92].contains(&object_type)))]
+    #[br(pre_assert([
+        // Original supported types
+        72, 6, 7, 8, 9, 90, 96, 92,
+        // LIN bus types (20-29)
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        // FlexRay types (27-39) - note overlap with LIN
+        30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+        // MOST bus types (40-50)
+        40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+        // Ethernet types (71, 113-120)
+        71, 113, 114, 115, 116, 117, 118, 119, 120,
+        // GPS/IMU types (80-85)
+        80, 81, 82, 83, 84, 85,
+        // Diagnostic types (51-70, excluding already handled types)
+        51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+        61, 62, 63, 64, 66, 67, 68, 69, 70,
+        // Additional common types
+        74, 75, 76, 77, 78, 79,
+        91, 93, 94, 95, 97, 98, 99,
+        102, 103, 104, 105, 106, 107, 108, 109, 110,
+        111, 112, 121, 122, 123, 124, 125
+    ].contains(&object_type)))]
     UnsupportedPadded {
         #[br(assert(remaining_size>0),pad_before = remaining_size-1, pad_after = remaining_size%4)]
         //data: Vec<u8>, with size remaining_size and pad_after=remaining_size%4

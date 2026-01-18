@@ -25,3 +25,4 @@ cc = "1.0"  # For building C++ wrapper code
 
 [dev-dependencies]
 tempfile = "3.8"  # For testing
+env_logger.workspace = true  # For examples with logging
