@@ -75,3 +75,4 @@ CMakeFiles/
 
 # Documentation build
 /book/
+!/releases/**/*.exe

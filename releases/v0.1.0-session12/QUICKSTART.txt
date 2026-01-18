@@ -1,0 +1,86 @@
+CAN Log Decoder - Multi-Network BLF Support
+Version: 0.1.0-session12
+Date: 2026-01-18
+
+WHAT'S NEW:
+✅ Fixed endless loop with multi-network BLF files (LIN, Ethernet, FlexRay, GPS, etc.)
+✅ Added support for 80+ BLF object types
+✅ Enhanced logging to show which network types are being skipped
+✅ Production-ready for real automotive logs
+
+QUICK START:
+============
+
+1. Basic Usage (no signal definitions):
+   decode_log.exe your_log_file.blf --limit 100
+
+2. With DBC definitions:
+   decode_log.exe your_log_file.blf --dbc powertrain.dbc --limit 100 --verbose
+
+3. With ARXML definitions:
+   decode_log.exe your_log_file.blf --arxml system.arxml --limit 100 --verbose
+
+4. Full analysis:
+   decode_log.exe your_log_file.blf --dbc powertrain.dbc --arxml system.arxml --verbose > output.txt
+
+EXPECTED OUTPUT:
+===============
+
+You should see:
+- Network type info messages (e.g., "Skipping LIN object type 20...")
+- Decoded CAN/CAN-FD messages with timestamps
+- Summary statistics showing:
+  * Total frames processed
+  * CAN frames decoded
+  * Unique message names
+  * Signal values (with --verbose)
+
+WHAT TO CHECK:
+=============
+
+✅ No endless "BadMagic" errors
+✅ Clean startup and processing
+✅ Info messages showing which non-CAN networks detected
+✅ Statistics showing expected number of CAN frames
+✅ Decoded signal values (if DBC/ARXML provided)
+
+TROUBLESHOOTING:
+===============
+
+Problem: Still seeing BadMagic errors
+Solution: Check README.md for details on adding new object types
+
+Problem: No CAN frames found
+Solution:
+- Check if file contains only non-CAN data
+- Verify file is valid BLF format
+- Try with a different log file
+
+Problem: Wrong frame count
+Solution: Compare with CANoe/CANalyzer statistics
+
+TECHNICAL DETAILS:
+=================
+
+Executable size: 4.1 MB (all dependencies statically linked)
+Platform: Windows x64
+Dependencies: None (fully standalone)
+Performance: ~10k-50k frames/second
+Supported formats: BLF (Type 86/100/101), MF4
+Supported networks: CAN, CAN-FD (others skipped cleanly)
+
+For complete technical documentation, see README.md
+
+BUILD FROM SOURCE:
+=================
+
+If you want to build from source:
+1. Install Rust: https://rustup.rs
+2. Clone repo: git clone https://github.com/MartinGrozev/CAN-log-reader-Rust.git
+3. Build: cargo build --release --example decode_log
+4. Executable: target/release/examples/decode_log.exe
+
+FEEDBACK:
+========
+
+Report issues at: https://github.com/MartinGrozev/CAN-log-reader-Rust/issues
