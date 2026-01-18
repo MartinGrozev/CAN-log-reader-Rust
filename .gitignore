@@ -7,6 +7,9 @@ Cargo.lock
 !/target/release/
 /target/release/*
 !/target/release/can-log-cli.exe
+!/target/release/examples/
+/target/release/examples/*
+!/target/release/examples/decode_log.exe
 !/target/release/*.dll
 
 # Rust debug builds
