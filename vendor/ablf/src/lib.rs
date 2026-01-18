@@ -383,12 +383,14 @@ impl<'a> AppText {
 
 pub struct LogContainerIter {
     cursor: std::io::Cursor<Vec<u8>>,
+    consecutive_bad_magic: u32, // Track consecutive BadMagic errors
 }
 
 impl LogContainerIter {
     fn new(data: Vec<u8>) -> LogContainerIter {
         LogContainerIter {
             cursor: std::io::Cursor::new(data),
+            consecutive_bad_magic: 0,
         }
     }
     fn remaining_data(self) -> Vec<u8> {
@@ -407,15 +409,32 @@ impl Iterator for LogContainerIter {
     type Item = Object;
     fn next(&mut self) -> Option<Self::Item> {
         match Object::read(&mut self.cursor) {
-            Ok(obj) => Some(obj),
+            Ok(obj) => {
+                // Reset consecutive error counter on success
+                self.consecutive_bad_magic = 0;
+                Some(obj)
+            }
             Err(e) => {
                 if e.is_eof() {
                     None
                 } else {
                     match e {
                         binrw::Error::BadMagic { pos, .. } => {
-                            println!("LogContainerIter: BadMagic, skipping 1 byte at pos={}", pos);
-                            //self.skipped += 1;
+                            self.consecutive_bad_magic += 1;
+
+                            // Prevent infinite loop: stop after 1000 consecutive BadMagic errors
+                            if self.consecutive_bad_magic > 1000 {
+                                eprintln!("LogContainerIter: Too many consecutive BadMagic errors (>1000), stopping iteration at pos={}", pos);
+                                return None;
+                            }
+
+                            // Suppress logging - these errors are normal for multi-network logs
+                            // The outer iterator already logs skipped network types
+                            // Only log if debugging is needed:
+                            // if self.consecutive_bad_magic % 100 == 1 {
+                            //     eprintln!("LogContainerIter: BadMagic (#{}) at pos={}", self.consecutive_bad_magic, pos);
+                            // }
+
                             self.cursor.seek(std::io::SeekFrom::Current(1)).unwrap();
                             self.next() // todo remove recursion!
                         }
