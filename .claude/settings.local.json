@@ -47,7 +47,8 @@
       "Bash(cargo run:*)",
       "Bash(./analyze_blf.exe:*)",
       "Bash(ls:*)",
-      "Bash(\"C:\\\\Users\\\\HP\\\\Rust\\\\CAN log reader\\\\target\\\\release\\\\examples\\\\decode_log.exe\")"
+      "Bash(\"C:\\\\Users\\\\HP\\\\Rust\\\\CAN log reader\\\\target\\\\release\\\\examples\\\\decode_log.exe\")",
+      "Bash(target/release/examples/decode_log.exe:*)"
     ],
     "deny": [],
     "ask": []

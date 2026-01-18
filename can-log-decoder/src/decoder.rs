@@ -211,18 +211,23 @@ where
             Ok(first_event)
         }
         // Check if this is a regular message
-        else if let Some(_message_def) = self.signal_db.get_message(can_id) {
-            log::debug!("Decoding message: ID 0x{:X}", can_id);
+        else if let Some(message_def) = self.signal_db.get_message(can_id) {
+            log::debug!("Decoding message: {} (ID 0x{:X})", message_def.name, can_id);
 
-            // TODO: Implement message decoding in future (will use MessageDecoder)
-            // For now, emit as raw frame
-            Ok(Some(DecodedEvent::RawFrame {
-                timestamp: frame.timestamp(),
-                channel: frame.channel,
-                can_id: frame.can_id,
-                data: frame.data,
-                is_fd: frame.is_fd,
-            }))
+            // Decode message signals using MessageDecoder
+            if let Some(decoded_event) = crate::message_decoder::MessageDecoder::decode_message(&frame, message_def) {
+                Ok(Some(decoded_event))
+            } else {
+                // Decoding failed, emit as raw frame
+                log::warn!("Failed to decode message 0x{:X}, emitting as raw frame", can_id);
+                Ok(Some(DecodedEvent::RawFrame {
+                    timestamp: frame.timestamp(),
+                    channel: frame.channel,
+                    can_id: frame.can_id,
+                    data: frame.data,
+                    is_fd: frame.is_fd,
+                }))
+            }
         }
         // Unknown CAN ID - emit as raw frame
         else {
