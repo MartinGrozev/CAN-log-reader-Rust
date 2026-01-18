@@ -16,8 +16,15 @@ use std::path::PathBuf;
 
 // Simple logger initialization
 fn init_logger() {
+    // Check if RUST_LOG is set, otherwise default to Info
+    let default_level = if std::env::var("RUST_LOG").is_ok() {
+        log::LevelFilter::Debug  // Use Debug if RUST_LOG is set
+    } else {
+        log::LevelFilter::Info  // Default to Info
+    };
+
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(default_level)
         .format_timestamp(None)
         .format_module_path(false)
         .init();

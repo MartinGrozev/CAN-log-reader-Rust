@@ -136,6 +136,7 @@ impl ArxmlParser {
                         if let Some(frame_ref) = self.find_sub_element(&element, "FRAME-REF")? {
                             if let Some(ref_text) = frame_ref.character_data() {
                                 let frame_path = ref_text.string_value().unwrap_or_default();
+                                log::debug!("Found CAN-FRAME-TRIGGERING: CAN-ID={}, FRAME-REF={}", can_id, frame_path);
                                 frame_to_can_id.insert(frame_path.clone(), can_id);
                             }
                         }
@@ -144,13 +145,19 @@ impl ArxmlParser {
             }
         }
 
+        log::debug!("Built frame_to_can_id map with {} entries", frame_to_can_id.len());
+
         // Step 2: Map PDU name → CAN ID by finding PDU-TO-FRAME-MAPPINGs
         for (_depth, element) in self.model.elements_dfs() {
             if element.element_name() == ElementName::CanFrame {
                 // Get this frame's AUTOSAR path
                 if let Ok(frame_path) = element.path() {
+                    log::debug!("Checking CAN-FRAME with path: {}", frame_path);
+
                     // Look up CAN ID for this frame
                     if let Some(&can_id) = frame_to_can_id.get(&frame_path) {
+                        log::debug!("Found CAN-ID {} for frame {}", can_id, frame_path);
+
                         // Find all PDU-TO-FRAME-MAPPINGs in this frame
                         if let Some(mappings) = self.find_sub_element(&element, "PDU-TO-FRAME-MAPPINGS")? {
                             for mapping in self.find_all_sub_elements(&mappings, "PDU-TO-FRAME-MAPPING")? {
@@ -161,12 +168,15 @@ impl ArxmlParser {
                                         let pdu_name = pdu_path.split('/').last().unwrap_or("");
 
                                         if !pdu_name.is_empty() {
+                                            log::debug!("Mapping PDU {} to CAN-ID {}", pdu_name, can_id);
                                             self.pdu_to_can_id.insert(pdu_name.to_string(), can_id);
                                         }
                                     }
                                 }
                             }
                         }
+                    } else {
+                        log::debug!("No CAN-ID found for frame path: {}", frame_path);
                     }
                 }
             }

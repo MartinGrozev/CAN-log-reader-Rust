@@ -79,18 +79,27 @@ impl ContainerDecoder {
     ) -> Result<Vec<DecodedEvent>> {
         let mut contained_pdus = Vec::new();
         let mut decoded_events = Vec::new();
+        let mut warning_count = 0;
+        const MAX_WARNINGS: usize = 5; // Limit warnings to prevent spam
 
         for pdu_info in pdus {
             // Validate position and size
             let end_pos = pdu_info.position + pdu_info.size;
             if end_pos > frame.data.len() {
-                log::warn!(
-                    "PDU {} at position {} with size {} exceeds frame data length {}",
-                    pdu_info.name,
-                    pdu_info.position,
-                    pdu_info.size,
-                    frame.data.len()
-                );
+                warning_count += 1;
+                if warning_count <= MAX_WARNINGS {
+                    log::warn!(
+                        "PDU {} at position {} with size {} exceeds frame data length {} (warning {}/{})",
+                        pdu_info.name,
+                        pdu_info.position,
+                        pdu_info.size,
+                        frame.data.len(),
+                        warning_count,
+                        MAX_WARNINGS
+                    );
+                } else if warning_count == MAX_WARNINGS + 1 {
+                    log::warn!("... suppressing further position warnings for this container");
+                }
                 continue;
             }
 
